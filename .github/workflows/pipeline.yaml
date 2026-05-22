@@ -21,24 +21,22 @@ jobs:
 
       - name: Package and Deploy
         run: |
-          # 1. Prepare Zip
+          # 1. Zip
+          rm -rf dist && mkdir -p dist/lambda
           cd lambda/plugin-manager
-          zip -r plugin-manager.zip .
-          mv plugin-manager.zip ../../
+          zip -r ../../dist/lambda/plugin-manager.zip .
           cd ../..
           
-          # 2. Get Account ID to construct bucket name
+          # 2. Define Names
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          BUCKET_NAME="grafana-deployment-bucket-$ACCOUNT_ID"
+          BUCKET_NAME="grafana-artifacts-v2-$ACCOUNT_ID-us-east-1"
           
-          # 3. Create bucket if it doesn't exist (handle first run)
+          # 3. Create bucket if missing, then upload
           aws s3 mb s3://$BUCKET_NAME || true
+          aws s3 cp dist/lambda/plugin-manager.zip s3://$BUCKET_NAME/lambda/plugin-manager.zip
           
-          # 4. Upload to S3
-          aws s3 cp plugin-manager.zip s3://$BUCKET_NAME/lambda/plugin-manager.zip
-          
-          # 5. Deploy
+          # 4. Deploy New Stack
           aws cloudformation deploy \
             --template-file cloudformation/main-stack.yaml \
-            --stack-name grafana-observability \
+            --stack-name grafana-observability-v2 \
             --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
