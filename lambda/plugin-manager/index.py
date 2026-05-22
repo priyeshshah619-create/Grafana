@@ -1,37 +1,25 @@
 import boto3
 import cfnresponse
 import json
-import logging
 
-# Set up logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+grafana = boto3.client('grafana')
 
 def lambda_handler(event, context):
-    logger.info(f"Received event: {json.dumps(event)}")
-
-    # --- MANUAL TEST BYPASS ---
-    # This prevents the SSLError when testing in the Lambda Console
-    if event.get('ResponseURL') == 'https://dummy-url.com':
-        logger.info("Manual test detected: bypassing cfnresponse.send")
-        return {"Status": "Manual Test Success"}
-
-    # --- CLOUDFORMATION CUSTOM RESOURCE LOGIC ---
     try:
-        request_type = event.get('RequestType')
-
-        if request_type == 'Delete':
+        if event['RequestType'] == 'Delete':
             cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
             return
 
-        # Add your actual plugin management logic here
-        logger.info(f"Handling {request_type} event")
+        props = event['ResourceProperties']
+        workspace_id = props['WorkspaceId']
+        plugins = props['Plugins']
 
-        # Example logic placeholder:
-        response_data = {'Message': 'Plugin operation successful'}
+        # Logic for Requirement 1b & Condition A
+        grafana.update_workspace_configuration(
+            workspaceId=workspace_id,
+            configuration=json.dumps({"plugins": {"pluginIds": plugins}})
+        )
 
-        cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
-
+        cfnresponse.send(event, context, cfnresponse.SUCCESS, {"Status": "PluginsInstalled"})
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+        cfnresponse.send(event, context, cfnresponse.FAILED, {"Error": str(e)})
