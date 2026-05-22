@@ -1,5 +1,11 @@
 Resources:
-  # 1. Amazon Managed Grafana Workspace
+  # 1. The Deployment Bucket
+  DeploymentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "grafana-deployment-bucket-${AWS::AccountId}"
+
+  # 2. Amazon Managed Grafana Workspace
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
@@ -7,7 +13,7 @@ Resources:
       AuthenticationProviders: [AWS_SSO]
       PermissionType: SERVICE_MANAGED
 
-  # 2. Lambda for Plugin Installation
+  # 3. Lambda for Plugin Installation
   PluginManagerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -15,11 +21,11 @@ Resources:
       Runtime: python3.9
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
-        S3Bucket: !Sub "deployment-bucket-${AWS::AccountId}" 
+        S3Bucket: !Ref DeploymentBucket
         S3Key: lambda/plugin-manager.zip
       Timeout: 300
 
-  # 3. Custom Resource to trigger the plugin installation
+  # 4. Custom Resource
   InstallPlugins:
     Type: Custom::GrafanaPlugin
     Properties:
@@ -27,7 +33,7 @@ Resources:
       WorkspaceId: !Ref GrafanaWorkspace
       Plugins: ["grafana-piechart-panel", "redis-datasource"]
 
-  # Ensure the IAM Role exists
+  # 5. IAM Role
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
