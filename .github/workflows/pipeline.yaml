@@ -1,1 +1,17 @@
-
+name: Deploy Observability Stack
+on: push
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Deploy CloudFormation
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/main-stack.yaml \
+            --stack-name grafana-observability \
+            --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
+      - name: Sync Dashboards
+        run: |
+          # Trigger your dashboard-manager lambda or CLI script here
+          python3 scripts/sync_dashboards.py
