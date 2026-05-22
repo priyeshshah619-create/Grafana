@@ -1,29 +1,58 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
-  S3BucketName: {Type: String}
+  S3BucketName:
+    Type: String
 
 Resources:
-  # IAM Role for Grafana (Fixes PropertyValidation Error)
+  # IAM Role for Grafana
   GrafanaWorkspaceRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
-        Statement: [{Effect: Allow, Principal: {Service: [grafana.amazonaws.com]}, Action: ['sts:AssumeRole']}]
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: grafana.amazonaws.com
+            Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSGrafanaServiceRolePolicy
 
-  # Managed Grafana Workspace (Req 1a)
+  # Managed Grafana Workspace
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
       AccountAccessType: CURRENT_ACCOUNT
-      AuthenticationProviders: [AWS_SSO]
+      AuthenticationProviders:
+        - AWS_SSO
       PermissionType: SERVICE_MANAGED
       WorkspaceRoleArn: !GetAtt GrafanaWorkspaceRole.Arn
-      Name: "ObservabilityWorkspace"
+      Name: ObservabilityWorkspace
 
-  # Condition A & B: Plugin Custom Resource
+  # Lambda for Plugin Installation
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: GrafanaManagement
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - grafana:UpdateWorkspaceConfiguration
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
   PluginManagerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -31,39 +60,22 @@ Resources:
       Handler: index.lambda_handler
       Runtime: python3.9
       Role: !GetAtt LambdaExecutionRole.Arn
-      Code: {S3Bucket: !Ref S3BucketName, S3Key: lambda/plugin-manager.zip}
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: lambda/plugin-manager.zip
 
   PluginManagerResource:
     Type: Custom::PluginManager
     Properties:
       ServiceToken: !GetAtt PluginManagerFunction.Arn
       WorkspaceId: !Ref GrafanaWorkspace
-      Plugins: ["grafana-piechart-panel", "grafana-clock-panel"]
+      Plugins:
+        - grafana-piechart-panel
+        - grafana-clock-panel
 
-  # 3 & C: CloudWatch Dashboard as Code
+  # CloudWatch Dashboard
   CloudWatchDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
       DashboardName: BusinessDrivenMonitoring
       DashboardBody: '{"widgets":[{"type":"metric","properties":{"metrics":[["AWS/Lambda","Errors","FunctionName","plugin-manager-final"]],"view":"timeSeries","region":"us-east-1"}}]}'
-
-  # 3. SNS Notification Topic
-  AlertTopic:
-    Type: AWS::SNS::Topic
-
-  # IAM Role for Lambda
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement: [{Effect: Allow, Principal: {Service: [lambda.amazonaws.com]}, Action: ['sts:AssumeRole']}]
-      Policies:
-        - PolicyName: GrafanaManagement
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: ['grafana:UpdateWorkspaceConfiguration', 'logs:*']
-                Resource: '*'
- 
