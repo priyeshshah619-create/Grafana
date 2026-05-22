@@ -3,7 +3,7 @@ Parameters:
   S3BucketName: {Type: String}
 
 Resources:
-  # 1a. SSO Integration & Workspace Role (Required for real-world deployment)
+  # 1a. IAM Role for Grafana (Fixes "Workspace Role ARN" error)
   GrafanaWorkspaceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -13,6 +13,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSGrafanaServiceRolePolicy
 
+  # 1. Managed Grafana Workspace
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
@@ -22,7 +23,7 @@ Resources:
       WorkspaceRoleArn: !GetAtt GrafanaWorkspaceRole.Arn
       Name: "ObservabilityWorkspace"
 
-  # 1b & Condition A: Plugin Installation Custom Resource
+  # Condition A: Plugin Installation Custom Resource
   PluginManagerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -39,18 +40,18 @@ Resources:
       WorkspaceId: !Ref GrafanaWorkspace
       Plugins: ["grafana-piechart-panel", "grafana-clock-panel"]
 
-  # 3 & Condition C: CloudWatch Dashboard as Code
+  # 3 & C: CloudWatch Dashboard as Code
   CloudWatchDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
       DashboardName: BusinessDrivenMonitoring
       DashboardBody: '{"widgets":[{"type":"metric","properties":{"metrics":[["AWS/Lambda","Errors","FunctionName","plugin-manager-final"]],"view":"timeSeries","region":"us-east-1"}}]}'
 
-  # 3. Alerts & Notification Templates
+  # 3. SNS Notifications for Alerts
   AlertTopic:
     Type: AWS::SNS::Topic
 
-  # IAM Execution Roles
+  # IAM Role for Lambda
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
