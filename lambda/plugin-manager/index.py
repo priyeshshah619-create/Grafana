@@ -5,13 +5,12 @@ import logging
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
 grafana = boto3.client('grafana')
 
 def lambda_handler(event, context):
     logger.info(f"Received event: {json.dumps(event)}")
 
-    # Manual test bypass
+    # Bypass for manual testing
     if event.get('ResponseURL') == 'https://dummy-url.com':
         return {"Status": "Manual Test Success"}
 
@@ -22,9 +21,9 @@ def lambda_handler(event, context):
 
         props = event.get('ResourceProperties', {})
         workspace_id = props.get('WorkspaceId')
-        plugins = props.get('Plugins', []) # List from CloudFormation
+        plugins = props.get('Plugins', [])
 
-        # Requirement 1b & Condition A/B
+        # Requirement 1b: API call to install plugins
         grafana.update_workspace_configuration(
             workspaceId=workspace_id,
             configuration=json.dumps({"plugins": {"pluginIds": plugins}})
