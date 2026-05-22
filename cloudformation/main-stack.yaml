@@ -1,10 +1,9 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
-  S3BucketName:
-    Type: String
+  S3BucketName: {Type: String}
 
 Resources:
-  # IAM Role for Grafana
+  # The Role that Grafana assumes
   GrafanaWorkspaceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -15,43 +14,31 @@ Resources:
             Principal:
               Service: grafana.amazonaws.com
             Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Ref AWS::AccountId
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSGrafanaServiceRolePolicy
 
-  # Managed Grafana Workspace
+  # The Grafana Workspace
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
       AccountAccessType: CURRENT_ACCOUNT
-      AuthenticationProviders:
-        - AWS_SSO
+      AuthenticationProviders: [AWS_SSO]
       PermissionType: SERVICE_MANAGED
       WorkspaceRoleArn: !GetAtt GrafanaWorkspaceRole.Arn
       Name: ObservabilityWorkspace
 
-  # Lambda for Plugin Installation
+  # Lambda setup (unchanged)
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: GrafanaManagement
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - grafana:UpdateWorkspaceConfiguration
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: '*'
+        Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}]
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
   PluginManagerFunction:
     Type: AWS::Lambda::Function
@@ -60,20 +47,15 @@ Resources:
       Handler: index.lambda_handler
       Runtime: python3.9
       Role: !GetAtt LambdaExecutionRole.Arn
-      Code:
-        S3Bucket: !Ref S3BucketName
-        S3Key: lambda/plugin-manager.zip
+      Code: {S3Bucket: !Ref S3BucketName, S3Key: lambda/plugin-manager.zip}
 
   PluginManagerResource:
     Type: Custom::PluginManager
     Properties:
       ServiceToken: !GetAtt PluginManagerFunction.Arn
       WorkspaceId: !Ref GrafanaWorkspace
-      Plugins:
-        - grafana-piechart-panel
-        - grafana-clock-panel
+      Plugins: ["grafana-piechart-panel", "grafana-clock-panel"]
 
-  # CloudWatch Dashboard
   CloudWatchDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
