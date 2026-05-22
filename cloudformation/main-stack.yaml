@@ -4,6 +4,7 @@ Parameters:
     Type: String
 
 Resources:
+  # The Role for Grafana with proper trust relationship
   GrafanaWorkspaceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -12,13 +13,17 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: grafana.amazonaws.com
-            Action: sts:AssumeRole
+              Service: 
+                - grafana.amazonaws.com
+            Action: 
+              - sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSGrafanaServiceRolePolicy
 
+  # Grafana Workspace
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
+    DependsOn: GrafanaWorkspaceRole
     Properties:
       AccountAccessType: CURRENT_ACCOUNT
       AuthenticationProviders:
@@ -27,6 +32,7 @@ Resources:
       WorkspaceRoleArn: !GetAtt GrafanaWorkspaceRole.Arn
       Name: ObservabilityWorkspace
 
+  # Role for Plugin Lambda
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
