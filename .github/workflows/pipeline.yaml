@@ -21,16 +21,23 @@ jobs:
 
       - name: Package and Deploy
         run: |
-          # Create zip file for the plugin manager
+          # 1. Prepare Zip
           cd lambda/plugin-manager
-          zip -r ../../plugin-manager.zip .
+          zip -r plugin-manager.zip .
+          mv plugin-manager.zip ../../
           cd ../..
           
-          # Upload to S3 (Ensure this bucket exists in your AWS Account)
-          # Note: Replace 'your-deployment-bucket' with your actual bucket name
-          aws s3 cp plugin-manager.zip s3://your-deployment-bucket/lambda/plugin-manager.zip
+          # 2. Get Account ID to construct bucket name
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET_NAME="grafana-deployment-bucket-$ACCOUNT_ID"
           
-          # Deploy CloudFormation
+          # 3. Create bucket if it doesn't exist (handle first run)
+          aws s3 mb s3://$BUCKET_NAME || true
+          
+          # 4. Upload to S3
+          aws s3 cp plugin-manager.zip s3://$BUCKET_NAME/lambda/plugin-manager.zip
+          
+          # 5. Deploy
           aws cloudformation deploy \
             --template-file cloudformation/main-stack.yaml \
             --stack-name grafana-observability \
