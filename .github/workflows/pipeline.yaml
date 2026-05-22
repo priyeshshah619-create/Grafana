@@ -33,6 +33,6 @@ jobs:
           # 3. Deploy with the unique bucket name passed as a parameter
           aws cloudformation deploy \
             --template-file cloudformation/main-stack.yaml \
-            --stack-name grafana-final-stack \
+            --stack-name grafana-observability \
             --parameter-overrides S3BucketName=$BUCKET_NAME \
             --capabilities CAPABILITY_IAM
