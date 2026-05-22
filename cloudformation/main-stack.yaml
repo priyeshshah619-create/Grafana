@@ -1,22 +1,21 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Grafana Observability Stack'
 
-Resources:
-  DeploymentBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      # Updated to v2 to bypass old cached metadata
-      BucketName: !Sub "grafana-artifacts-v2-${AWS::AccountId}-${AWS::Region}"
+Parameters:
+  S3BucketName:
+    Type: String
+    Description: The name of the S3 bucket created by the pipeline
 
+Resources:
   PluginManagerFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: plugin-manager
+      FunctionName: plugin-manager-final
       Handler: index.lambda_handler
       Runtime: python3.9
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
-        S3Bucket: !Ref DeploymentBucket
+        S3Bucket: !Ref S3BucketName
         S3Key: lambda/plugin-manager.zip
 
   LambdaExecutionRole:
