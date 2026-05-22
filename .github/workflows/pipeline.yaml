@@ -1,22 +1,37 @@
 name: Deploy Observability Stack
-on: push
+
+on:
+  push:
+    branches:
+      - main
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
-      
-      - name: Package Lambda and Deploy
+
+      - name: Package and Deploy
         run: |
-          cd lambda/plugin-manager && zip -r ../../plugin-manager.zip .
+          # Create zip file for the plugin manager
+          cd lambda/plugin-manager
+          zip -r ../../plugin-manager.zip .
+          cd ../..
+          
+          # Upload to S3 (Ensure this bucket exists in your AWS Account)
+          # Note: Replace 'your-deployment-bucket' with your actual bucket name
           aws s3 cp plugin-manager.zip s3://your-deployment-bucket/lambda/plugin-manager.zip
+          
+          # Deploy CloudFormation
           aws cloudformation deploy \
             --template-file cloudformation/main-stack.yaml \
             --stack-name grafana-observability \
-            --capabilities CAPABILITY_IAM
+            --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
