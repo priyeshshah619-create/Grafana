@@ -1,20 +1,33 @@
 Resources:
   # 1. The Deployment Bucket
-  # Globally unique bucket name using Account ID and Region
   DeploymentBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "grafana-artifacts-${AWS::AccountId}-${AWS::Region}"
 
-  # 2. Amazon Managed Grafana Workspace
+  # 2. IAM Role for Grafana Workspace
+  GrafanaWorkspaceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: grafana.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonGrafanaViewerAccess
+
+  # 3. Amazon Managed Grafana Workspace
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
       AccountAccessType: CURRENT_ACCOUNT
       AuthenticationProviders: [AWS_SSO]
       PermissionType: SERVICE_MANAGED
+      RoleArn: !GetAtt GrafanaWorkspaceRole.Arn  # <--- THIS IS THE FIX
 
-  # 3. Lambda for Plugin Installation
+  # 4. Lambda for Plugin Installation
   PluginManagerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -26,16 +39,16 @@ Resources:
         S3Key: lambda/plugin-manager.zip
       Timeout: 300
 
-  # 4. Custom Resource to trigger the plugin installation
+  # 5. Custom Resource to trigger the plugin installation
   InstallPlugins:
     Type: Custom::GrafanaPlugin
     Properties:
       ServiceToken: !GetAtt PluginManagerFunction.Arn
       WorkspaceId: !Ref GrafanaWorkspace
       Plugins: ["grafana-piechart-panel", "redis-datasource"]
-    DependsOn: GrafanaWorkspace  # Ensures the Workspace is ready first
+    DependsOn: GrafanaWorkspace
 
-  # 5. IAM Role for Lambda
+  # 6. IAM Role for Lambda
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
