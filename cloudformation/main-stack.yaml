@@ -15,8 +15,18 @@ Resources:
           - Effect: Allow
             Principal: {Service: grafana.amazonaws.com}
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonGrafanaViewerAccess
+      Policies:
+        - PolicyName: GrafanaViewAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:DescribeAlarmsForMetric
+                  - cloudwatch:ListMetrics
+                  - cloudwatch:GetMetricData
+                  - cloudwatch:GetMetricStatistics
+                Resource: "*"
 
   # 3. Amazon Managed Grafana Workspace
   GrafanaWorkspace:
@@ -25,7 +35,7 @@ Resources:
       AccountAccessType: CURRENT_ACCOUNT
       AuthenticationProviders: [AWS_SSO]
       PermissionType: SERVICE_MANAGED
-      RoleArn: !GetAtt GrafanaWorkspaceRole.Arn  # <--- THIS IS THE FIX
+      RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
 
   # 4. Lambda for Plugin Installation
   PluginManagerFunction:
@@ -39,7 +49,7 @@ Resources:
         S3Key: lambda/plugin-manager.zip
       Timeout: 300
 
-  # 5. Custom Resource to trigger the plugin installation
+  # 5. Custom Resource
   InstallPlugins:
     Type: Custom::GrafanaPlugin
     Properties:
