@@ -1,1 +1,25 @@
 
+Resources:
+  GrafanaWorkspace:
+    Type: AWS::Grafana::Workspace
+    Properties:
+      AccountAccessType: CURRENT_ACCOUNT
+      AuthenticationProviders: [AWS_SSO]
+      PermissionType: SERVICE_MANAGED
+      
+  PluginManagerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.9
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: your-deployment-bucket # Change this!
+        S3Key: lambda/plugin-manager.zip
+
+  InstallPlugins:
+    Type: Custom::GrafanaPlugin
+    Properties:
+      ServiceToken: !GetAtt PluginManagerFunction.Arn
+      WorkspaceId: !Ref GrafanaWorkspace
+      Plugins: ["grafana-piechart-panel", "redis-datasource"]
