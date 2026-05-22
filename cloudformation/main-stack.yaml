@@ -1,45 +1,38 @@
-name: Deploy Observability Stack
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Grafana Observability Stack'
 
-on:
-  push:
-    branches:
-      - main
+Resources:
+  DeploymentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      # Updated to v2 to bypass old cached metadata
+      BucketName: !Sub "grafana-artifacts-v2-${AWS::AccountId}-${AWS::Region}"
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+  PluginManagerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: plugin-manager
+      Handler: index.lambda_handler
+      Runtime: python3.9
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref DeploymentBucket
+        S3Key: lambda/plugin-manager.zip
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Package and Deploy
-        run: |
-          # 1. Zip the plugin manager
-          cd lambda/plugin-manager
-          zip -r plugin-manager.zip .
-          
-          # 2. Prepare directory for upload
-          mkdir -p ../../dist/lambda
-          mv plugin-manager.zip ../../dist/lambda/plugin-manager.zip
-          cd ../..
-          
-          # 3. Define the bucket name exactly as it appears in main-stack.yaml
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          REGION="us-east-1"
-          BUCKET_NAME="grafana-artifacts-$ACCOUNT_ID-$REGION"
-          
-          # 4. Upload to the correct S3 path
-          aws s3 cp dist/lambda/plugin-manager.zip s3://$BUCKET_NAME/lambda/plugin-manager.zip
-          
-          # 5. Deploy CloudFormation
-          aws cloudformation deploy \
-            --template-file cloudformation/main-stack.yaml \
-            --stack-name grafana-observability \
-            --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: [lambda.amazonaws.com]}
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: LambdaBasicExecution
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents']
+                Resource: 'arn:aws:logs:*:*:*'
