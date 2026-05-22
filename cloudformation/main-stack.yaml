@@ -3,16 +3,26 @@ Parameters:
   S3BucketName: {Type: String}
 
 Resources:
-  # 1. Managed Grafana (Req 1)
+  # 1a. SSO Integration & Workspace Role (Required for real-world deployment)
+  GrafanaWorkspaceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Effect: Allow, Principal: {Service: [grafana.amazonaws.com]}, Action: ['sts:AssumeRole']}]
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGrafanaServiceRolePolicy
+
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
       AccountAccessType: CURRENT_ACCOUNT
       AuthenticationProviders: [AWS_SSO]
       PermissionType: SERVICE_MANAGED
+      WorkspaceRoleArn: !GetAtt GrafanaWorkspaceRole.Arn
       Name: "ObservabilityWorkspace"
 
-  # Plugin Management (Condition A & B)
+  # 1b & Condition A: Plugin Installation Custom Resource
   PluginManagerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -29,18 +39,18 @@ Resources:
       WorkspaceId: !Ref GrafanaWorkspace
       Plugins: ["grafana-piechart-panel", "grafana-clock-panel"]
 
-  # 3 & C. CloudWatch Dashboard as Code
+  # 3 & Condition C: CloudWatch Dashboard as Code
   CloudWatchDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
       DashboardName: BusinessDrivenMonitoring
-      DashboardBody: '{"widgets":[{"type":"metric","properties":{"metrics":[["AWS/Lambda","Errors","FunctionName","plugin-manager-final"]],"view":"timeSeries","stacked":false,"region":"us-east-1","title":"Lambda Errors"}}]}'
+      DashboardBody: '{"widgets":[{"type":"metric","properties":{"metrics":[["AWS/Lambda","Errors","FunctionName","plugin-manager-final"]],"view":"timeSeries","region":"us-east-1"}}]}'
 
-  # 3. SNS Notifications for Alerts
+  # 3. Alerts & Notification Templates
   AlertTopic:
     Type: AWS::SNS::Topic
 
-  # IAM Roles (Ensuring permissions to manage Grafana)
+  # IAM Execution Roles
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
