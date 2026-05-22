@@ -1,17 +1,33 @@
 name: Deploy Observability Stack
-on: push
+
+on:
+  push:
+    branches:
+      - main
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1 # Ensure this matches your AWS region
+
       - name: Deploy CloudFormation
         run: |
           aws cloudformation deploy \
             --template-file cloudformation/main-stack.yaml \
             --stack-name grafana-observability \
             --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
+
       - name: Sync Dashboards
         run: |
-          # Trigger your dashboard-manager lambda or CLI script here
+          # This step assumes you have a python script configured to push
+          # the JSON from your /dashboards folder to your AMG workspace
           python3 scripts/sync_dashboards.py
