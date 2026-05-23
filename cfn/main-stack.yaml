@@ -1,13 +1,14 @@
 AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Managed Grafana Workspace and Dashboard'
 
 Resources:
   GrafanaWorkspace:
     Type: 'AWS::Grafana::Workspace'
     Properties:
-      Name: 'Grafana-Dashboard-Workspace' # This property is missing and mandatory
+      Name: 'Grafana-Dashboard-Workspace'
       AccountAccessType: 'CURRENT_ACCOUNT'
       AuthenticationProviders: ['AWS_SSO']
-      PermissionType: 'SERVICE_MANAGED'
+      PermissionType: 'CUSTOMER_MANAGED'
       WorkspaceRoleArn: 'arn:aws:iam::882352060841:role/GrafanaWorkspaceRole'
 
   MyDashboard:
