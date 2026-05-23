@@ -5,7 +5,7 @@ Resources:
   GrafanaWorkspace:
     Type: 'AWS::Grafana::Workspace'
     Properties:
-      Name: 'MyGrafanaWorkspace'
+      Name: 'Grafana-Dashboard-Workspace' # This property is missing and mandatory
       AccountAccessType: 'CURRENT_ACCOUNT'
       AuthenticationProviders: ['AWS_SSO']
       PermissionType: 'SERVICE_MANAGED'
