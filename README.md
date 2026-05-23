@@ -1,4 +1,4 @@
-This Github prject strictly satisfies below 7 requirements with 3 conditions
+This Github project strictly satisfies below 7 requirements with 3 conditions
 
 IAC - Cloudformation
 
