@@ -1,5 +1,4 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Managed Grafana Workspace and Dashboard'
 
 Resources:
   GrafanaWorkspace:
