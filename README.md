@@ -1,20 +1,36 @@
-AWS Observability Framework: Managed Grafana & CloudWatch
-This repository provides a production-ready, IaC-driven observability stack. It consolidates AWS CloudWatch metrics and Managed Grafana dashboards into a single, automated deployment pipeline.
+This Github prject strictly satisfies below 7 requirements with 3 conditions
 
-Key Features
-AWS Managed Grafana: Automated workspace with AWS SSO integration.
+IAC - Cloudformation
 
-Custom Plugin Management: Uses a CloudFormation Custom Resource and Lambda to automate plugin installation (grafana-piechart-panel, etc.).
+Service - AWS Managed Grafana,Cloudwatch
 
-Dashboard-as-Code: Custom CloudWatch dashboards defined directly in IaC.
+Account - All to be done in single Account
 
-Fully Automated CI/CD: Automated deployment via GitHub Actions.
+1. Create AWS managed grafana and install basic plugins via code(use cfn custom resources)
 
-Scalable Foundation: Built to support OpenTelemetry (OTEL) for multi-cloud monitoring.
+    a. sso integration
 
-Deployment
-Setup: Ensure AWS credentials are saved in your GitHub Secrets (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY).
+    b. install plugins 
 
-Deploy: Push any change to the main branch to trigger the pipeline.
+2. Setup one observability in aws cloudwatch
 
-Monitor: Check deployment status via the AWS CloudFormation Console.
+3. Create a custom cloudwatch dashboard for collected metrics and create grafana alerts to send sns notification via notification templates
+
+4. Dashboards/Alerts deployment to be automatic via github actions after the setup
+
+5. Experience on Multi cloud observability and standards 
+
+6. Application specific business driven monitoring and reporting (eg: how to collect data via OTEL or similar)
+
+7. Experience in Data collection framework and consolidation which is key to Observability
+
+Conditions:
+A. Need to see plugin installation part. Please write cloudformation custom resource for the same.
+
+B. Need to see the lambda code for the plugin installation .Need to be done end to via CI/CD not just write code.-   
+
+C. Need to see dashboard as a code.
+
+We need to create real world example.
+As you can see I have created users in IAM & IAM identity center.
+If possible I want to do all remaining things with IAC
