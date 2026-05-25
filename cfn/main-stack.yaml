@@ -1,4 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Managed Grafana Workspace Foundation'
+
 Resources:
   GrafanaWorkspace:
     Type: 'AWS::Grafana::Workspace'
@@ -6,52 +8,6 @@ Resources:
       Name: 'Grafana-Dashboard-Workspace'
       AuthenticationProviders: ['AWS_SSO']
       PermissionType: 'SERVICE_MANAGED'
-
-  PluginInstaller:
-    Type: 'Custom::PluginInstaller'
-    Properties:
-      ServiceToken: !GetAtt PluginLambdaFunction.Arn
-      WorkspaceId: !Ref GrafanaWorkspace
-
-  PluginLambdaFunction:
-    Type: 'AWS::Lambda::Function'
-    Properties:
-      Handler: 'index.handler'
-      Runtime: 'python3.9'
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Timeout: 60
-      Code:
-        ZipFile: |
-          import boto3, cfnresponse, json
-          def handler(event, context):
-              if event['RequestType'] == 'Delete':
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-                  return
-              try:
-                  grafana = boto3.client('grafana')
-                  config = {"plugins": [{"pluginId": "grafana-clock-panel", "pluginVersion": "1.0.0"}]}
-                  grafana.update_workspace_configuration(workspaceId=event['ResourceProperties']['WorkspaceId'], configuration=json.dumps(config))
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-              except Exception as e:
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
-
-  LambdaExecutionRole:
-    Type: 'AWS::IAM::Role'
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: { Service: lambda.amazonaws.com }
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: 'GrafanaPluginAccess'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: ['grafana:UpdateWorkspaceConfiguration', 'logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents']
-                Resource: '*'
 
   MyDashboard:
     Type: 'AWS::CloudWatch::Dashboard'
