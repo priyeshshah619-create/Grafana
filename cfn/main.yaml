@@ -25,14 +25,9 @@ Resources:
     Properties:
       AccountAccessType: CURRENT_ACCOUNT
       AuthenticationProviders: [AWS_SSO]
-      PermissionType: SERVICE_MANAGED
+      PermissionType: CUSTOMER_MANAGED
       WorkspaceRoleArn: !GetAtt GrafanaWorkspaceRole.Arn
       Name: ObservabilityStack
-
-  SNSTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: GrafanaAlerts
 
   LambdaRole:
     Type: AWS::IAM::Role
@@ -50,22 +45,22 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.handler
-      Runtime: python3.9
+      Runtime: python3.11
       Role: !GetAtt LambdaRole.Arn
       Code:
         ZipFile: |
-          import boto3, json, cfnresponse
+          import json, boto3, cfnresponse
           def handler(event, context):
+              if event['RequestType'] == 'Delete':
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return
               try:
-                  if event['RequestType'] in ['Create', 'Update']:
-                      grafana = boto3.client('managedgrafana')
-                      workspace_id = event['ResourceProperties']['WorkspaceId']
-                      plugins = event['ResourceProperties']['Plugins']
-                      config = {"plugins": [{"pluginId": p} for p in plugins]}
-                      grafana.update_workspace_configuration(workspaceId=workspace_id, configuration=json.dumps(config))
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-                  else:
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  client = boto3.client('grafana')
+                  client.update_workspace_configuration(
+                      workspaceId=event['ResourceProperties']['WorkspaceId'],
+                      configuration=json.dumps({"plugins": [{"pluginId": p} for p in event['ResourceProperties']['Plugins']]})
+                  )
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
               except Exception as e:
                   print(e)
                   cfnresponse.send(event, context, cfnresponse.FAILED, {})
