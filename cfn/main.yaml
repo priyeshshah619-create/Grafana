@@ -2,7 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Observability Stack with Managed Grafana and CloudWatch
 
 Resources:
-  # IAM Role for Grafana to access CloudWatch
   GrafanaWorkspaceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -18,13 +17,9 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action: 
-                  - cloudwatch:Describe*
-                  - cloudwatch:Get*
-                  - cloudwatch:List*
+                Action: ["cloudwatch:Describe*", "cloudwatch:Get*", "cloudwatch:List*"]
                 Resource: "*"
 
-  # Managed Grafana Workspace (Satisfies Req 1 & 1a)
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
@@ -34,13 +29,23 @@ Resources:
       WorkspaceRoleArn: !GetAtt GrafanaWorkspaceRole.Arn
       Name: ObservabilityStack
 
-  # SNS Topic for Grafana Alerts (Satisfies Req 3)
   SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: GrafanaAlerts
 
-  # Lambda Function with Inline Code (Satisfies Condition A & B)
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{Action: "sts:AssumeRole", Effect: Allow, Principal: {Service: lambda.amazonaws.com}}]
+      Policies:
+        - PolicyName: GrafanaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement: [{Action: ["grafana:UpdateWorkspaceConfiguration", "logs:*"], Effect: Allow, Resource: "*"}]
+
   PluginInstallerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -65,7 +70,6 @@ Resources:
                   print(f"Error: {e}")
                   cfnresponse.send(event, context, cfnresponse.FAILED, {})
 
-  # Custom Resource to trigger plugin install (Satisfies Condition A)
   CustomPluginResource:
     Type: Custom::GrafanaPlugins
     Properties:
@@ -73,17 +77,6 @@ Resources:
       WorkspaceId: !Ref GrafanaWorkspace
       Plugins: ["grafana-clock-panel", "grafana-piechart-panel"]
 
-  LambdaRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement: [{Action: "sts:AssumeRole", Effect: Allow, Principal: {Service: lambda.amazonaws.com}}]
-      Policies:
-        - PolicyName: GrafanaPolicy
-          PolicyDocument:
-            Statement: [{Action: ["grafana:UpdateWorkspaceConfiguration", "logs:*", "cloudwatch:PutMetricData"], Effect: Allow, Resource: "*"}]
-
 Outputs:
   WorkspaceId:
-    Description: The ID of the Grafana Workspace
     Value: !Ref GrafanaWorkspace
