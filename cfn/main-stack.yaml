@@ -1,12 +1,9 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Managed Grafana Workspace Foundation'
-
 Resources:
   GrafanaWorkspace:
     Type: 'AWS::Grafana::Workspace'
     Properties:
       Name: 'Grafana-Dashboard-Workspace'
-      AuthenticationProviders: ['AWS_SSO']
       PermissionType: 'SERVICE_MANAGED'
 
   MyDashboard:
