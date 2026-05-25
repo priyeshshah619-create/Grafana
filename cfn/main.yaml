@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  GrafanaWorkspace:
+    Type: AWS::Grafana::Workspace
+    Properties:
+      AccountAccessType: CURRENT_ACCOUNT
+      AuthenticationProviders: [AWS_SSO]
+      PermissionType: SERVICE_MANAGED
+      Name: ObservabilityStack
+
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: GrafanaAlerts
+
+  PluginInstallerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.9
+      Role: !GetAtt LambdaRole.Arn
+      Code:
+        S3Bucket: your-deployment-bucket # Update this
+        S3Key: lambda.zip
+
+  CustomPluginResource:
+    Type: Custom::GrafanaPlugins
+    Properties:
+      ServiceToken: !GetAtt PluginInstallerFunction.Arn
+      WorkspaceId: !Ref GrafanaWorkspace
+      Plugins: ["grafana-clock-panel", "grafana-piechart-panel"]
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement: [{Action: "sts:AssumeRole", Effect: Allow, Principal: {Service: lambda.amazonaws.com}}]
+      Policies:
+        - PolicyName: GrafanaPolicy
+          PolicyDocument:
+            Statement: [{Action: ["grafana:UpdateWorkspaceConfiguration", "logs:*"], Effect: Allow, Resource: "*"}]
