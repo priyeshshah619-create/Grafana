@@ -46,3 +46,4 @@ jobs:
             --stack-name grafana-dashboard \
             --capabilities CAPABILITY_NAMED_IAM \
             --region us-east-1
+ 
