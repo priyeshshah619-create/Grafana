@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Managed Grafana Workspace and Dashboard'
+Description: 'Managed Grafana Workspace with Plugin Custom Resource'
 
 Resources:
   GrafanaWorkspace:
@@ -11,21 +11,59 @@ Resources:
       PermissionType: 'CUSTOMER_MANAGED'
       WorkspaceRoleArn: 'arn:aws:iam::882352060841:role/GrafanaWorkspaceRole'
 
+  # Condition A: Custom Resource to install plugins
+  PluginInstaller:
+    Type: 'Custom::PluginInstaller'
+    Properties:
+      ServiceToken: !GetAtt PluginLambdaFunction.Arn
+      WorkspaceId: !Ref GrafanaWorkspace
+
+  # Lambda function definition (Condition B)
+  PluginLambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: 'index.handler'
+      Runtime: 'python3.9'
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3, cfnresponse, json
+          def handler(event, context):
+              if event['RequestType'] == 'Delete':
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return
+              try:
+                  grafana = boto3.client('grafana')
+                  config = {"plugins": [{"pluginId": "grafana-clock-panel", "pluginVersion": "1.0.0"}]}
+                  grafana.update_workspace_configuration(workspaceId=event['ResourceProperties']['WorkspaceId'], configuration=json.dumps(config))
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: 'GrafanaPluginAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['grafana:UpdateWorkspaceConfiguration', 'logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents']
+                Resource: '*'
+
+  # Condition C: Dashboard as Code
   MyDashboard:
     Type: 'AWS::CloudWatch::Dashboard'
     Properties:
       DashboardName: 'Interview-Demo-Dashboard'
       DashboardBody: >
-        {
-          "widgets": [
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [ [ "AWS/EC2", "CPUUtilization", "InstanceId", "i-1234567890abcdef0" ] ],
-                "view": "timeSeries",
-                "stacked": false,
-                "title": "EC2 CPU Utilization"
-              }
-            }
-          ]
-        }
+        {"widgets": [{"type": "metric", "properties": {"metrics": [ [ "AWS/EC2", "CPUUtilization", "InstanceId", "i-1234567890abcdef0" ] ], "view": "timeSeries", "stacked": false, "title": "EC2 CPU Utilization" } } ] }
