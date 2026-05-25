@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Observability Stack - Base
+Description: Minimal Managed Grafana Workspace
 
 Resources:
   GrafanaWorkspaceRole:
@@ -12,7 +12,7 @@ Resources:
             Principal: {Service: grafana.amazonaws.com}
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: GrafanaAccess
+        - PolicyName: CloudWatchAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
