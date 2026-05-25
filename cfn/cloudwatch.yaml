@@ -1,1 +1,18 @@
-
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  CWDash:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: "BizMetrics"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [["AWS/EC2","CPUUtilization","InstanceId","i-1234567890"]],
+                "title": "EC2 CPU"
+              }
+            }
+          ]
+        }
