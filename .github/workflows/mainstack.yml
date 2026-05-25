@@ -10,8 +10,8 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      id-token: write        # Required for OIDC authentication
-      contents: read         # Required to checkout code
+      id-token: write
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -20,26 +20,29 @@ jobs:
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          aws-region: ap-south-1                # Default region for all stacks
-          role-to-assume: arn:aws:iam::882352868841:role/GrafanaWorkspaceRole
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::882352060841:role/GrafanaWorkspaceRole
 
       - name: Deploy Grafana Stack
         run: |
           aws cloudformation deploy \
             --template-file cfn/grafana.yaml \
             --stack-name grafana \
-            --capabilities CAPABILITY_NAMED_IAM
+            --capabilities CAPABILITY_NAMED_IAM \
+            --region us-east-1
 
       - name: Deploy CloudWatch Stack
         run: |
           aws cloudformation deploy \
             --template-file cfn/cloudwatch.yaml \
             --stack-name cw \
-            --capabilities CAPABILITY_NAMED_IAM
+            --capabilities CAPABILITY_NAMED_IAM \
+            --region us-east-1
 
       - name: Upload Dashboard and Alerts
         run: |
           aws cloudformation deploy \
             --template-file cfn/dashboard.yaml \
             --stack-name grafana-dashboard \
-            --capabilities CAPABILITY_NAMED_IAM
+            --capabilities CAPABILITY_NAMED_IAM \
+            --region us-east-1
