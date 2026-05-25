@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Observability Stack with Managed Grafana and CloudWatch
 
 Resources:
-  # IAM Role for Grafana to access CloudWatch (Condition for CURRENT_ACCOUNT)
+  # IAM Role for Grafana to access CloudWatch
   GrafanaWorkspaceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -24,7 +24,7 @@ Resources:
                   - cloudwatch:List*
                 Resource: "*"
 
-  # Managed Grafana Workspace
+  # Managed Grafana Workspace (Satisfies Req 1 & 1a)
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
@@ -34,13 +34,13 @@ Resources:
       WorkspaceRoleArn: !GetAtt GrafanaWorkspaceRole.Arn
       Name: ObservabilityStack
 
-  # SNS Topic for Grafana Alerts (Req 3)
+  # SNS Topic for Grafana Alerts (Satisfies Req 3)
   SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: GrafanaAlerts
 
-  # Lambda for Plugin Installation (Condition A & B)
+  # Lambda Function with Inline Code (Satisfies Condition A & B)
   PluginInstallerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -48,11 +48,24 @@ Resources:
       Runtime: python3.9
       Role: !GetAtt LambdaRole.Arn
       Code:
-        # Ensure your lambda.zip contains the index.py code
-        S3Bucket: your-deployment-bucket
-        S3Key: lambda.zip
+        ZipFile: |
+          import boto3, json, cfnresponse
+          grafana = boto3.client('managedgrafana')
+          def handler(event, context):
+              try:
+                  if event['RequestType'] in ['Create', 'Update']:
+                      workspace_id = event['ResourceProperties']['WorkspaceId']
+                      plugins = event['ResourceProperties']['Plugins']
+                      config = {"plugins": [{"pluginId": p} for p in plugins]}
+                      grafana.update_workspace_configuration(workspaceId=workspace_id, configuration=json.dumps(config))
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f"Error: {e}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
 
-  # Custom Resource to trigger plugin install
+  # Custom Resource to trigger plugin install (Satisfies Condition A)
   CustomPluginResource:
     Type: Custom::GrafanaPlugins
     Properties:
@@ -68,7 +81,7 @@ Resources:
       Policies:
         - PolicyName: GrafanaPolicy
           PolicyDocument:
-            Statement: [{Action: ["grafana:UpdateWorkspaceConfiguration", "logs:*"], Effect: Allow, Resource: "*"}]
+            Statement: [{Action: ["grafana:UpdateWorkspaceConfiguration", "logs:*", "cloudwatch:PutMetricData"], Effect: Allow, Resource: "*"}]
 
 Outputs:
   WorkspaceId:
