@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Observability Stack with Managed Grafana and CloudWatch
+Description: Observability Stack - Managed Grafana & CloudWatch
 
 Resources:
   GrafanaWorkspaceRole:
@@ -36,7 +36,7 @@ Resources:
         Version: '2012-10-17'
         Statement: [{Action: "sts:AssumeRole", Effect: Allow, Principal: {Service: lambda.amazonaws.com}}]
       Policies:
-        - PolicyName: GrafanaPolicy
+        - PolicyName: GrafanaConfigPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement: [{Action: ["grafana:UpdateWorkspaceConfiguration", "logs:*"], Effect: Allow, Resource: "*"}]
@@ -49,16 +49,19 @@ Resources:
       Role: !GetAtt LambdaRole.Arn
       Code:
         ZipFile: |
-          import json, boto3, cfnresponse
+          import json
+          import boto3
+          import cfnresponse
           def handler(event, context):
               if event['RequestType'] == 'Delete':
                   cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
                   return
               try:
                   client = boto3.client('grafana')
+                  plugins = [{"pluginId": p} for p in event['ResourceProperties']['Plugins']]
                   client.update_workspace_configuration(
                       workspaceId=event['ResourceProperties']['WorkspaceId'],
-                      configuration=json.dumps({"plugins": [{"pluginId": p} for p in event['ResourceProperties']['Plugins']]})
+                      configuration=json.dumps({"plugins": plugins})
                   )
                   cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
               except Exception as e:
