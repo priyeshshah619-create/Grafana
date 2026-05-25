@@ -1,1 +1,57 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  GrafanaWS:
+    Type: AWS::Grafana::Workspace
+    Properties:
+      AccountAccessType: CURRENT_ACCOUNT
+      AuthenticationProviders: [AWS_SSO]
+      PermissionType: SERVICE_MANAGED
+      GrafanaVersion: "9.4"
+      Name: "ObsGrafana"
 
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: GrafanaAlerts
+
+  SNSSub:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: priyesh.shah619@gmail.com
+      TopicArn: !Ref SNSTopic
+
+  PluginLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: lambda.handler
+      Runtime: python3.9
+      Role: !GetAtt LambdaRole.Arn
+      Code:
+        ZipFile: |
+          import boto3, cfnresponse
+          def handler(event, ctx):
+              g = boto3.client('grafana')
+              try:
+                  if event['RequestType'] in ['Create','Update']:
+                      ws = event['ResourceProperties']['WS']
+                      for p in event['ResourceProperties']['Plugins']:
+                          g.install_plugin(workspaceId=ws, pluginId=p)
+                  cfnresponse.send(event, ctx, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  cfnresponse.send(event, ctx, cfnresponse.FAILED, {"Error": str(e)})
+
+  PluginCR:
+    Type: Custom::PluginInstaller
+    Properties:
+      ServiceToken: !GetAtt PluginLambda.Arn
+      WS: !Ref GrafanaWS
+      Plugins:
+        - grafana-piechart-panel
+        - grafana-clock-panel
+
+Outputs:
+  WorkspaceId:
+    Value: !Ref GrafanaWS
+    Export:
+      Name: GrafanaWorkspaceId
