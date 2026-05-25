@@ -1,18 +1,46 @@
 AWSTemplateFormatVersion: '2010-09-09'
+Description: Observability Stack with Managed Grafana and CloudWatch
+
 Resources:
+  # IAM Role for Grafana to access CloudWatch (Condition for CURRENT_ACCOUNT)
+  GrafanaWorkspaceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: grafana.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: GrafanaCloudWatchAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - cloudwatch:Describe*
+                  - cloudwatch:Get*
+                  - cloudwatch:List*
+                Resource: "*"
+
+  # Managed Grafana Workspace
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
       AccountAccessType: CURRENT_ACCOUNT
       AuthenticationProviders: [AWS_SSO]
       PermissionType: SERVICE_MANAGED
+      WorkspaceRoleArn: !GetAtt GrafanaWorkspaceRole.Arn
       Name: ObservabilityStack
 
+  # SNS Topic for Grafana Alerts (Req 3)
   SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: GrafanaAlerts
 
+  # Lambda for Plugin Installation (Condition A & B)
   PluginInstallerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -20,9 +48,11 @@ Resources:
       Runtime: python3.9
       Role: !GetAtt LambdaRole.Arn
       Code:
-        S3Bucket: your-deployment-bucket # Update this
+        # Ensure your lambda.zip contains the index.py code
+        S3Bucket: your-deployment-bucket
         S3Key: lambda.zip
 
+  # Custom Resource to trigger plugin install
   CustomPluginResource:
     Type: Custom::GrafanaPlugins
     Properties:
@@ -39,3 +69,8 @@ Resources:
         - PolicyName: GrafanaPolicy
           PolicyDocument:
             Statement: [{Action: ["grafana:UpdateWorkspaceConfiguration", "logs:*"], Effect: Allow, Resource: "*"}]
+
+Outputs:
+  WorkspaceId:
+    Description: The ID of the Grafana Workspace
+    Value: !Ref GrafanaWorkspace
