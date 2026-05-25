@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Observability Stack - Managed Grafana & CloudWatch
+Description: Observability Stack - Base
 
 Resources:
   GrafanaWorkspaceRole:
@@ -12,7 +12,7 @@ Resources:
             Principal: {Service: grafana.amazonaws.com}
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: GrafanaCloudWatchAccess
+        - PolicyName: GrafanaAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -28,53 +28,3 @@ Resources:
       PermissionType: CUSTOMER_MANAGED
       WorkspaceRoleArn: !GetAtt GrafanaWorkspaceRole.Arn
       Name: ObservabilityStack
-
-  LambdaRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement: [{Action: "sts:AssumeRole", Effect: Allow, Principal: {Service: lambda.amazonaws.com}}]
-      Policies:
-        - PolicyName: GrafanaConfigPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement: [{Action: ["grafana:UpdateWorkspaceConfiguration", "logs:*"], Effect: Allow, Resource: "*"}]
-
-  PluginInstallerFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      Handler: index.handler
-      Runtime: python3.11
-      Role: !GetAtt LambdaRole.Arn
-      Code:
-        ZipFile: |
-          import json
-          import boto3
-          import cfnresponse
-          def handler(event, context):
-              if event['RequestType'] == 'Delete':
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-                  return
-              try:
-                  client = boto3.client('grafana')
-                  plugins = [{"pluginId": p} for p in event['ResourceProperties']['Plugins']]
-                  client.update_workspace_configuration(
-                      workspaceId=event['ResourceProperties']['WorkspaceId'],
-                      configuration=json.dumps({"plugins": plugins})
-                  )
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-              except Exception as e:
-                  print(e)
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
-
-  CustomPluginResource:
-    Type: Custom::GrafanaPlugins
-    Properties:
-      ServiceToken: !GetAtt PluginInstallerFunction.Arn
-      WorkspaceId: !Ref GrafanaWorkspace
-      Plugins: ["grafana-clock-panel", "grafana-piechart-panel"]
-
-Outputs:
-  WorkspaceId:
-    Value: !Ref GrafanaWorkspace
