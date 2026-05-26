@@ -1,5 +1,46 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Resources:
+  # IAM Role for Lambda to call Grafana API
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: GrafanaPluginAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [grafana:UpdateWorkspaceConfiguration]
+                Resource: !Sub "arn:aws:grafana:${AWS::Region}:${AWS::AccountId}:/workspaces/*"
+
+  # IAM Role for Grafana
+  GrafanaWorkspaceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: grafana.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [cloudwatch:GetMetricData, cloudwatch:ListMetrics, cloudwatch:GetMetricStatistics]
+                Resource: "*"
+
+  # AWS Managed Grafana Workspace
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
@@ -9,6 +50,7 @@ Resources:
       Name: ObservabilityStack
       RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
 
+  # Custom Resource to trigger Plugin Installation
   PluginInstallerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -18,26 +60,23 @@ Resources:
       Timeout: 300
       Code:
         ZipFile: |
-          import json, boto3, urllib.request
-          def send(event, context, status, data):
-              response = json.dumps({"Status": status, "PhysicalResourceId": "PluginInstaller", "StackId": event['StackId'], "RequestId": event['RequestId'], "LogicalResourceId": event['LogicalResourceId'], "Data": data}).encode('utf-8')
-              req = urllib.request.Request(event['ResponseURL'], data=response, method='PUT', headers={'Content-Type': ''})
-              with urllib.request.urlopen(req) as f: pass
+          import json, boto3, cfnresponse
           def lambda_handler(event, context):
+              if event['RequestType'] == 'Delete':
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return
               try:
-                  if event['RequestType'] == 'Delete': send(event, context, "SUCCESS", {}); return
-                  boto3.client('grafana').update_workspace_configuration(
+                  client = boto3.client('grafana')
+                  client.update_workspace_configuration(
                       workspaceId=event['ResourceProperties']['WorkspaceId'],
                       configuration=json.dumps({"plugins": [{"pluginId": "grafana-clock-panel"}]})
                   )
-                  send(event, context, "SUCCESS", {"Message": "Plugin Installed"})
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {"Message": "Plugin Installed"})
               except Exception as e:
-                  send(event, context, "FAILED", {"Error": str(e)})
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {"Error": str(e)})
 
-  CustomPluginResource:
-    Type: Custom::GrafanaPlugins
-    DependsOn: GrafanaWorkspace
+  InstallPlugins:
+    Type: Custom::GrafanaPlugin
     Properties:
       ServiceToken: !GetAtt PluginInstallerFunction.Arn
       WorkspaceId: !Ref GrafanaWorkspace
- 
