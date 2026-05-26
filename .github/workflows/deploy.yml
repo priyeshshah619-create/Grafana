@@ -21,3 +21,4 @@ jobs:
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           aws grafana create-dashboard --workspace-id $WS_ID --definition file://dashboards/business-metrics.json
  
+ 
