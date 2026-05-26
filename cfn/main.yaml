@@ -2,24 +2,24 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Observability Stack with Managed Grafana and CloudWatch
 
 Resources:
-  # 1. Managed Grafana Workspace
+  # Managed Grafana Workspace
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
       AccountAccessType: CURRENT_ACCOUNT
       AuthenticationProviders: [AWS_SSO]
       PermissionType: SERVICE_MANAGED
-      Name: ObervabilityStack
-      RoleARN: !GetAtt GrafanaWorkspaceRole.Arn
+      WorkspaceName: ObservabilityStack
+      RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
 
-  # A. Custom Resource for Plugin Installation
+  # Custom Resource for Plugin Installation
   InstallPlugins:
     Type: Custom::GrafanaPlugin
     Properties:
       ServiceToken: !GetAtt PluginInstallerFunction.Arn
       WorkspaceId: !Ref GrafanaWorkspace
 
-  # B. Lambda for Plugin Installation (Self-contained)
+  # Lambda for Plugin Installation
   PluginInstallerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -33,29 +33,17 @@ Resources:
           http = urllib3.PoolManager()
           def lambda_handler(event, context):
               response_url = event['ResponseURL']
-              response_body = {
-                  "Status": "SUCCESS", 
-                  "Reason": "Plugin configured", 
-                  "PhysicalResourceId": context.log_stream_name,
-                  "StackId": event['StackId'],
-                  "RequestId": event['RequestId'],
-                  "LogicalResourceId": event['LogicalResourceId']
-              }
+              response_body = {"Status": "SUCCESS", "Reason": "Plugin configured", "PhysicalResourceId": context.log_stream_name, "StackId": event['StackId'], "RequestId": event['RequestId'], "LogicalResourceId": event['LogicalResourceId']}
               try:
                   if event['RequestType'] != 'Delete':
                       client = boto3.client('grafana')
-                      client.update_workspace_configuration(
-                          workspaceId=event['ResourceProperties']['WorkspaceId'],
-                          configuration=json.dumps({"plugins": [{"pluginId": "grafana-clock-panel"}]})
-                      )
+                      client.update_workspace_configuration(workspaceId=event['ResourceProperties']['WorkspaceId'], configuration=json.dumps({"plugins": [{"pluginId": "grafana-clock-panel"}]}))
               except Exception as e:
-                  print(f"Error: {e}")
                   response_body['Status'] = 'FAILED'
                   response_body['Reason'] = str(e)
               json_response = json.dumps(response_body).encode('utf-8')
               http.request('PUT', response_url, body=json_response, headers={'content-type': '', 'content-length': str(len(json_response))})
 
-  # IAM Roles
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
