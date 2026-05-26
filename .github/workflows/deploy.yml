@@ -20,5 +20,9 @@ jobs:
         run: |
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           aws grafana create-dashboard --workspace-id $WS_ID --definition file://dashboards/business-metrics.json
+HEAD
  
  
+
+# Force update to trigger pipeline
+ ed099d9 (Bypass stuck queue by changing concurrency group)
