@@ -4,13 +4,13 @@ Description: Observability Stack with Managed Grafana and CloudWatch
 Resources:
   # Managed Grafana Workspace
   GrafanaWorkspace:
-    Type: AWS::Grafana::Workspace
-    Properties:
-      AccountAccessType: CURRENT_ACCOUNT
-      AuthenticationProviders: [AWS_SSO]
-      PermissionType: SERVICE_MANAGED
-      WorkspaceName: ObservabilityStack
-      RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
+  Type: AWS::Grafana::Workspace
+  Properties:
+    AccountAccessType: CURRENT_ACCOUNT
+    AuthenticationProviders: [AWS_SSO]
+    PermissionType: SERVICE_MANAGED
+    WorkspaceName: ObservabilityStack
+    RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
 
   # Custom Resource for Plugin Installation
   InstallPlugins:
