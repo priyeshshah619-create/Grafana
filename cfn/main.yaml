@@ -1,56 +1,47 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Resources:
-  # IAM Role for Lambda to call Grafana API
-  LambdaRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: {Service: lambda.amazonaws.com}
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: GrafanaPluginAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: [grafana:UpdateWorkspaceConfiguration]
-                Resource: !Sub "arn:aws:grafana:${AWS::Region}:${AWS::AccountId}:/workspaces/*"
-
-  # IAM Role for Grafana
-  GrafanaWorkspaceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: {Service: grafana.amazonaws.com}
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CloudWatchAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: [cloudwatch:GetMetricData, cloudwatch:ListMetrics, cloudwatch:GetMetricStatistics]
-                Resource: "*"
-
-  # AWS Managed Grafana Workspace
+  # 1. Grafana Workspace
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
       AccountAccessType: CURRENT_ACCOUNT
       AuthenticationProviders: ["AWS_SSO"]
-      PermissionType: CUSTOMER_MANAGED
+      PermissionType: SERVICE_MANAGED
       Name: ObservabilityStack
       RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
 
-  # Custom Resource to trigger Plugin Installation
+  # 2. Data Collection Framework (OTEL Configuration)
+  OtelCollectorConfig:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /observability/otel-config
+      Type: String
+      Value: |
+        receivers: { otlp: { protocols: { grpc: {} } } }
+        exporters: { awsemf: { log_group_name: /aws/observability/metrics } }
+        service: { pipelines: { metrics: { receivers: [otlp], exporters: [awsemf] } } }
+
+  # 3. SNS Notification Topic (Requirement 3)
+  SnsNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: GrafanaAlertsTopic
+
+  # 4. CloudWatch Alarm (Requirement 3)
+  BusinessLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Alerts when latency exceeds 100ms"
+      MetricName: Latency
+      Namespace: BusinessMetrics
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 100
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: [!Ref SnsNotificationTopic]
+
+  # 5. Robust Plugin Installer (Condition A & B)
   PluginInstallerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -62,21 +53,28 @@ Resources:
         ZipFile: |
           import json, boto3, cfnresponse
           def lambda_handler(event, context):
-              if event['RequestType'] == 'Delete':
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-                  return
+              status = cfnresponse.SUCCESS
+              response_data = {"Message": "Plugin processed"}
               try:
-                  client = boto3.client('grafana')
-                  client.update_workspace_configuration(
-                      workspaceId=event['ResourceProperties']['WorkspaceId'],
-                      configuration=json.dumps({"plugins": [{"pluginId": "grafana-clock-panel"}]})
-                  )
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {"Message": "Plugin Installed"})
+                  if event['RequestType'] != 'Delete':
+                      client = boto3.client('grafana')
+                      client.update_workspace_configuration(
+                          workspaceId=event['ResourceProperties']['WorkspaceId'],
+                          configuration=json.dumps({"plugins": [{"pluginId": "grafana-clock-panel"}]})
+                      )
               except Exception as e:
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {"Error": str(e)})
+                  print(f"Error: {e}")
+                  status = cfnresponse.FAILED
+                  response_data = {"Error": str(e)}
+              finally:
+                  cfnresponse.send(event, context, status, response_data)
 
   InstallPlugins:
     Type: Custom::GrafanaPlugin
     Properties:
       ServiceToken: !GetAtt PluginInstallerFunction.Arn
       WorkspaceId: !Ref GrafanaWorkspace
+
+Outputs:
+  WorkspaceId:
+    Value: !Ref GrafanaWorkspace
