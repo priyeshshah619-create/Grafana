@@ -13,14 +13,14 @@ Resources:
       Name: ObservabilityStack
       RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
 
-  # 2. Custom Resource for Plugin Installation (Requirement 1 & Condition A)
+  # 2. Custom Resource for Plugin Installation
   InstallPlugins:
     Type: Custom::GrafanaPlugin
     Properties:
       ServiceToken: !GetAtt PluginInstallerFunction.Arn
       WorkspaceId: !Ref GrafanaWorkspace
 
-  # 3. Lambda for Plugin Installation (Condition B)
+  # 3. Lambda for Plugin Installation
   PluginInstallerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -33,24 +33,38 @@ Resources:
           import json, urllib3, boto3
           http = urllib3.PoolManager()
           def lambda_handler(event, context):
+              request_id = event['RequestId']
               response_url = event['ResponseURL']
-              response_data = {"Status": "SUCCESS", "Reason": "Plugin configured", "PhysicalResourceId": context.log_stream_name}
+              # We use a static physical ID for custom resources to ensure updates/deletes work
+              physical_id = "GrafanaPluginInstaller"
+              
+              response_data = {
+                  "Status": "SUCCESS",
+                  "Reason": "Plugin configured",
+                  "PhysicalResourceId": physical_id,
+                  "StackId": event['StackId'],
+                  "RequestId": request_id,
+                  "LogicalResourceId": event['LogicalResourceId']
+              }
+              
               try:
                   if event['RequestType'] != 'Delete':
                       client = boto3.client('grafana')
-                      # Corrected JSON structure for Grafana 10.4
+                      # Required format for Managed Grafana v10+ configuration
+                      # Ensure pluginId exists in your version's plugin catalog
                       config = {"plugins": [{"pluginId": "grafana-clock-panel", "enabled": True}]}
                       client.update_workspace_configuration(
                           workspaceId=event['ResourceProperties']['WorkspaceId'],
                           configuration=json.dumps(config)
                       )
               except Exception as e:
-                  response_data = {"Status": "FAILED", "Reason": str(e), "PhysicalResourceId": context.log_stream_name}
+                  response_data["Status"] = "FAILED"
+                  response_data["Reason"] = str(e)
               
               json_data = json.dumps(response_data).encode('utf-8')
               http.request('PUT', response_url, body=json_data, headers={'content-type': '', 'content-length': str(len(json_data))})
 
-  # IAM Roles
+  # 4. IAM Roles
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -73,3 +87,4 @@ Resources:
 Outputs:
   WorkspaceId:
     Value: !Ref GrafanaWorkspace
+    
