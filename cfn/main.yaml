@@ -10,7 +10,29 @@ Resources:
       Name: ObservabilityStack
       RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
 
-  # 2. Data Collection Framework (Req 6 & 7)
+  # 2. IAM Role for Grafana Workspace
+  GrafanaWorkspaceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: grafana.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: GrafanaPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:GetMetricData
+                Resource: "*"
+
+  # 3. Data Collection Framework (OTEL Configuration)
   OtelCollectorConfig:
     Type: AWS::SSM::Parameter
     Properties:
@@ -21,13 +43,13 @@ Resources:
         exporters: { awsemf: { log_group_name: /aws/observability/metrics } }
         service: { pipelines: { metrics: { receivers: [otlp], exporters: [awsemf] } } }
 
-  # 3. SNS Notification Topic (Req 3)
+  # 4. SNS Notification Topic (Requirement 3)
   SnsNotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: GrafanaAlertsTopic
 
-  # 4. CloudWatch Alarm (Req 3)
+  # 5. CloudWatch Alarm (Requirement 3)
   BusinessLatencyAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -41,7 +63,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       AlarmActions: [!Ref SnsNotificationTopic]
 
-  # 5. Lambda Role (Fixed: Defining missing resource)
+  # 6. Lambda Role
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -60,7 +82,7 @@ Resources:
                 Action: [grafana:UpdateWorkspaceConfiguration, logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
                 Resource: "*"
 
-  # 6. Fail-Safe Plugin Installer (Condition A & B)
+  # 7. Fail-Safe Plugin Installer
   PluginInstallerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -73,7 +95,6 @@ Resources:
           import json, boto3, cfnresponse
           def lambda_handler(event, context):
               status = cfnresponse.SUCCESS
-              response_data = {"Message": "Plugin processed"}
               try:
                   if event['RequestType'] != 'Delete':
                       client = boto3.client('grafana')
@@ -82,11 +103,9 @@ Resources:
                           configuration=json.dumps({"plugins": [{"pluginId": "grafana-clock-panel"}]})
                       )
               except Exception as e:
-                  print(f"Error: {e}")
                   status = cfnresponse.FAILED
-                  response_data = {"Error": str(e)}
               finally:
-                  cfnresponse.send(event, context, status, response_data)
+                  cfnresponse.send(event, context, status, {})
 
   InstallPlugins:
     Type: Custom::GrafanaPlugin
