@@ -1,13 +1,7 @@
 {
   "dashboard": {
     "title": "Business Metrics Dashboard",
-    "panels": [
-      {
-        "type": "graph",
-        "title": "Request Latency",
-        "targets": [{ "refId": "A", "expr": "rate(http_requests_total[5m])" }]
-      }
-    ],
+    "panels": [{"type": "graph", "title": "Latency", "targets": [{"expr": "rate(http_requests[5m])"}]}],
     "schemaVersion": 35
   },
   "message": "Managed by CI/CD"
