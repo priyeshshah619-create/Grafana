@@ -10,7 +10,7 @@ Resources:
       Name: ObservabilityStack
       RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
 
-  # 2. Data Collection Framework (OTEL Configuration)
+  # 2. Data Collection Framework (Req 6 & 7)
   OtelCollectorConfig:
     Type: AWS::SSM::Parameter
     Properties:
@@ -21,13 +21,13 @@ Resources:
         exporters: { awsemf: { log_group_name: /aws/observability/metrics } }
         service: { pipelines: { metrics: { receivers: [otlp], exporters: [awsemf] } } }
 
-  # 3. SNS Notification Topic (Requirement 3)
+  # 3. SNS Notification Topic (Req 3)
   SnsNotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: GrafanaAlertsTopic
 
-  # 4. CloudWatch Alarm (Requirement 3)
+  # 4. CloudWatch Alarm (Req 3)
   BusinessLatencyAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -41,7 +41,26 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       AlarmActions: [!Ref SnsNotificationTopic]
 
-  # 5. Robust Plugin Installer (Condition A & B)
+  # 5. Lambda Role (Fixed: Defining missing resource)
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: GrafanaPluginPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [grafana:UpdateWorkspaceConfiguration, logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: "*"
+
+  # 6. Fail-Safe Plugin Installer (Condition A & B)
   PluginInstallerFunction:
     Type: AWS::Lambda::Function
     Properties:
