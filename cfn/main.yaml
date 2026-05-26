@@ -10,7 +10,7 @@ Resources:
       AuthenticationProviders:
         - AWS_SSO
       PermissionType: SERVICE_MANAGED
-      WorkspaceName: ObservabilityStack
+      Name: ObservabilityStack
       RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
 
   # Custom Resource for Plugin Installation
