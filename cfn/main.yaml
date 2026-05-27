@@ -30,39 +30,23 @@ Resources:
       Timeout: 60
       Code:
         ZipFile: |
-          import json, urllib3, boto3
-          http = urllib3.PoolManager()
+          import json, urllib3, boto3, cfnresponse
           def lambda_handler(event, context):
-              request_id = event['RequestId']
-              response_url = event['ResponseURL']
-              # We use a static physical ID for custom resources to ensure updates/deletes work
-              physical_id = "GrafanaPluginInstaller"
-              
-              response_data = {
-                  "Status": "SUCCESS",
-                  "Reason": "Plugin configured",
-                  "PhysicalResourceId": physical_id,
-                  "StackId": event['StackId'],
-                  "RequestId": request_id,
-                  "LogicalResourceId": event['LogicalResourceId']
-              }
-              
+              if event['RequestType'] == 'Delete':
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return
               try:
-                  if event['RequestType'] != 'Delete':
-                      client = boto3.client('grafana')
-                      # Required format for Managed Grafana v10+ configuration
-                      # Ensure pluginId exists in your version's plugin catalog
-                      config = {"plugins": [{"pluginId": "grafana-clock-panel", "enabled": True}]}
-                      client.update_workspace_configuration(
-                          workspaceId=event['ResourceProperties']['WorkspaceId'],
-                          configuration=json.dumps(config)
-                      )
+                  client = boto3.client('grafana')
+                  # Valid schema for v10.4 plugin management
+                  config = {"plugins": {"pluginAdminEnabled": True}}
+                  client.update_workspace_configuration(
+                      workspaceId=event['ResourceProperties']['WorkspaceId'],
+                      configuration=json.dumps(config)
+                  )
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {"Message": "Config updated"})
               except Exception as e:
-                  response_data["Status"] = "FAILED"
-                  response_data["Reason"] = str(e)
-              
-              json_data = json.dumps(response_data).encode('utf-8')
-              http.request('PUT', response_url, body=json_data, headers={'content-type': '', 'content-length': str(len(json_data))})
+                  print(f"Error: {e}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {"Error": str(e)})
 
   # 4. IAM Roles
   LambdaRole:
@@ -71,6 +55,8 @@ Resources:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}]
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: GrafanaPluginPolicy
           PolicyDocument:
@@ -87,4 +73,3 @@ Resources:
 Outputs:
   WorkspaceId:
     Value: !Ref GrafanaWorkspace
-    
