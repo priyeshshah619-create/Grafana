@@ -34,10 +34,36 @@ Resources:
               except Exception as e:
                   send(event, context, "FAILED", {"Error": str(e)})
 
+  # ... (existing content above)
+
   CustomPluginResource:
     Type: Custom::GrafanaPlugins
     DependsOn: GrafanaWorkspace
     Properties:
       ServiceToken: !GetAtt PluginInstallerFunction.Arn
       WorkspaceId: !Ref GrafanaWorkspace
- 
+
+  BusinessDashboard:
+    Type: AWS::Grafana::Dashboard
+    Properties:
+      WorkspaceId: !Ref GrafanaWorkspace
+      DashboardData: >
+        {
+          "dashboard": {
+            "title": "Business Metrics Dashboard",
+            "uid": "business-metrics-001",
+            "schemaVersion": 35,
+            "panels": [
+              {
+                "type": "graph",
+                "title": "Latency",
+                "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+                "targets": [{ "refId": "A", "expr": "rate(http_requests_total[5m])" }]
+              }
+            ]
+          }
+        }
+
+Outputs:
+  WorkspaceId:
+    Value: !Ref GrafanaWorkspace
