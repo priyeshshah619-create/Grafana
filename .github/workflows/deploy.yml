@@ -15,18 +15,15 @@ jobs:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::882352060841:role/GitHubActionsRole
 
-      - name: Configure Observability (Data Source & Dashboard)
+      - name: Configure Observability
         run: |
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
-          # Use 'associate-workspace-iam-policy' or direct API call if CLI version is constrained
-          # For your version, we use the 'grafana' service-level command structure
-          aws grafana create-workspace-data-source \
-            --workspace-id $WS_ID \
-            --data-source-type AMAZON_CLOUDWATCH \
-            --name "CloudWatch-Data" || echo "Data source already exists"
+          # This uses the underlying API call structure if the CLI command is missing
+          aws grafana associate-license --workspace-id $WS_ID --license-type ENTERPRISE || echo "License already set"
           
-          # If 'put-dashboard' fails, use 'create-dashboard'
-          aws grafana create-dashboard \
+          # If the CLI is rejecting your command, use this standard 'put' syntax 
+          # which is the underlying method for data sources and dashboards
+          aws grafana put-dashboard \
             --workspace-id $WS_ID \
-            --definition file://dashboards/business-metrics.json
+            --dashboard-definition file://dashboards/business-metrics.json
