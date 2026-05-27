@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-AWS-credentials@v4
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::882352060841:role/GitHubActionsRole
@@ -24,7 +24,7 @@ jobs:
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
           # Requirement 2 & 7: Register CloudWatch as Data Source
-          # Using --query and error handling to ensure idempotency
+          # Using || echo to ensure idempotency (will not fail if already added)
           aws grafana create-workspace-data-source --workspace-id $WS_ID --data-source-type AMAZON_CLOUDWATCH --name "CloudWatch-Data" || echo "Data source already configured"
           
           # Condition C: Dashboard as Code
