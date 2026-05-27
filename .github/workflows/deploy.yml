@@ -17,18 +17,16 @@ jobs:
 
       - name: Configure Observability (Data Source & Dashboard)
         run: |
-          # Fetch the Workspace ID from your existing stack
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
-          # Requirement 2 & 7: Register CloudWatch as Data Source
-          # Using 'grafana' namespace which is standard across all CLI versions
+          # Use 'associate-workspace-iam-policy' or direct API call if CLI version is constrained
+          # For your version, we use the 'grafana' service-level command structure
           aws grafana create-workspace-data-source \
             --workspace-id $WS_ID \
             --data-source-type AMAZON_CLOUDWATCH \
             --name "CloudWatch-Data" || echo "Data source already exists"
           
-          # Condition C: Dashboard as Code
-          # 'put-dashboard' is safer/more reliable across versions than 'create-dashboard'
-          aws grafana put-dashboard \
+          # If 'put-dashboard' fails, use 'create-dashboard'
+          aws grafana create-dashboard \
             --workspace-id $WS_ID \
-            --dashboard-definition file://dashboards/business-metrics.json
+            --definition file://dashboards/business-metrics.json
