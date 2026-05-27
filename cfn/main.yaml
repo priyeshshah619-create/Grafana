@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Observability Stack with Managed Grafana and CloudWatch
+Description: Full Observability Stack (Managed Grafana + CloudWatch)
 
 Resources:
+  # 1. Managed Grafana Workspace
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
@@ -11,6 +12,14 @@ Resources:
       Name: ObservabilityStack
       RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
 
+  # 2. CloudWatch Data Source (Requirement 7)
+  GrafanaDataSource:
+    Type: AWS::Grafana::DataSource
+    Properties:
+      DataSourceType: AMAZON_CLOUDWATCH
+      WorkspaceId: !Ref GrafanaWorkspace
+
+  # 3. Custom Resource for Plugin Installation (Condition A)
   InstallPlugins:
     Type: Custom::GrafanaPlugin
     Properties:
@@ -29,23 +38,19 @@ Resources:
           import json, urllib3, boto3
           http = urllib3.PoolManager()
           def lambda_handler(event, context):
-              response_url = event['ResponseURL']
-              response_body = {
-                  "Status": "SUCCESS", "Reason": "Configured", "PhysicalResourceId": "GrafanaPlugin",
-                  "StackId": event['StackId'], "RequestId": event['RequestId'], "LogicalResourceId": event['LogicalResourceId']
-              }
-              if event['RequestType'] != 'Delete':
-                  try:
-                      client = boto3.client('grafana')
-                      client.update_workspace_configuration(
-                          workspaceId=event['ResourceProperties']['WorkspaceId'],
-                          configuration=json.dumps({"plugins": {"pluginAdminEnabled": True}})
-                      )
-                  except Exception as e:
-                      response_body.update({"Status": "FAILED", "Reason": str(e)})
-              
-              encoded_body = json.dumps(response_body).encode('utf-8')
-              http.request('PUT', response_url, body=encoded_body, headers={'content-type': '', 'content-length': str(len(encoded_body))})
+              if event['RequestType'] == 'Delete':
+                  return
+              try:
+                  client = boto3.client('grafana')
+                  client.update_workspace_configuration(
+                      workspaceId=event['ResourceProperties']['WorkspaceId'], 
+                      configuration=json.dumps({"plugins": {"pluginAdminEnabled": True}})
+                  )
+                  # Send success back to CloudFormation
+                  resp = {"Status": "SUCCESS", "PhysicalResourceId": "GrafanaPlugin"}
+              except Exception as e:
+                  resp = {"Status": "FAILED", "Reason": str(e)}
+              http.request('PUT', event['ResponseURL'], body=json.dumps(resp), headers={'content-type': '', 'content-length': '0'})
 
   LambdaRole:
     Type: AWS::IAM::Role
@@ -53,8 +58,7 @@ Resources:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}]
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole]
       Policies:
         - PolicyName: GrafanaPluginPolicy
           PolicyDocument:
