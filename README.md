@@ -1,36 +1,24 @@
-This Github project strictly satisfies below 7 requirements with 3 conditions
+# AWS Observability Framework
 
-IAC - Cloudformation
+Automated observability stack using AWS Managed Grafana, CloudWatch, and Infrastructure-as-Code (IaC).
 
-Service - AWS Managed Grafana,Cloudwatch
+## Architecture Highlights
+- **Infrastructure:** Provisioned via CloudFormation, including custom resources for plugin management.
+- **Data Consolidation:** Centralized observability via Amazon CloudWatch integrated into Grafana.
+- **Automation:** End-to-end CI/CD using GitHub Actions for both infrastructure and dashboard-as-code deployment.
+- **Standards:** Utilizes open-standard query patterns for business-driven monitoring.
 
-Account - All to be done in single Account
+## Key Features
+1. **Managed Grafana:** Integrated with AWS IAM Identity Center for SSO.
+2. **Automated Plugins:** Custom Lambda-backed CloudFormation resource for seamless plugin installation.
+3. **Dashboard-as-Code:** Dashboards are maintained as JSON, automatically synchronized to the workspace via CI/CD.
+4. **Scalable Monitoring:** Built to support OpenTelemetry and business-specific metrics.
 
-1. Create AWS managed grafana and install basic plugins via code(use cfn custom resources)
+## CI/CD Pipeline
+The pipeline handles the lifecycle of the observability configuration:
+- Triggers on `push` to `main`.
+- Automates Data Source registration (`AMAZON_CLOUDWATCH`).
+- Syncs dashboard definitions using the AWS CLI `put-dashboard` API.
 
-    a. sso integration
-
-    b. install plugins 
-
-2. Setup one observability in aws cloudwatch
-
-3. Create a custom cloudwatch dashboard for collected metrics and create grafana alerts to send sns notification via notification templates
-
-4. Dashboards/Alerts deployment to be automatic via github actions after the setup
-
-5. Experience on Multi cloud observability and standards 
-
-6. Application specific business driven monitoring and reporting (eg: how to collect data via OTEL or similar)
-
-7. Experience in Data collection framework and consolidation which is key to Observability
-
-Conditions:
-A. Need to see plugin installation part. Please write cloudformation custom resource for the same.
-
-B. Need to see the lambda code for the plugin installation .Need to be done end to via CI/CD not just write code.-   
-
-C. Need to see dashboard as a code.
-
-We need to create real world example.
-As you can see I have created users in IAM & IAM identity center.
-If possible I want to do all remaining things with IAC
+---
+*Built for scalable, automated, and multi-cloud ready observability.*
