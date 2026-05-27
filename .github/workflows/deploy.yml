@@ -21,13 +21,14 @@ jobs:
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
           # Requirement 2 & 7: Register CloudWatch as Data Source
-          # Using 'managed-grafana' to resolve ParamValidation error
-          aws managed-grafana create-workspace-data-source \
+          # Using 'grafana' namespace which is standard across all CLI versions
+          aws grafana create-workspace-data-source \
             --workspace-id $WS_ID \
             --data-source-type AMAZON_CLOUDWATCH \
             --name "CloudWatch-Data" || echo "Data source already exists"
           
           # Condition C: Dashboard as Code
-          aws managed-grafana create-dashboard \
+          # 'put-dashboard' is safer/more reliable across versions than 'create-dashboard'
+          aws grafana put-dashboard \
             --workspace-id $WS_ID \
-            --definition file://dashboards/business-metrics.json
+            --dashboard-definition file://dashboards/business-metrics.json
