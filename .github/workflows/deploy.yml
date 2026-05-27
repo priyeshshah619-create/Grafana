@@ -15,14 +15,19 @@ jobs:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::882352060841:role/GitHubActionsRole
 
-      # We skip 'aws cloudformation deploy' entirely to ensure 0% risk.
       - name: Configure Observability (Data Source & Dashboard)
         run: |
           # Fetch the Workspace ID from your existing stack
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
-          # Add CloudWatch as Data Source via API
-          aws grafana create-workspace-data-source --workspace-id $WS_ID --data-source-type AMAZON_CLOUDWATCH --name "CloudWatch-Data" || echo "Data source already exists"
+          # Requirement 2 & 7: Register CloudWatch as Data Source
+          # Using 'managed-grafana' to resolve ParamValidation error
+          aws managed-grafana create-workspace-data-source \
+            --workspace-id $WS_ID \
+            --data-source-type AMAZON_CLOUDWATCH \
+            --name "CloudWatch-Data" || echo "Data source already exists"
           
-          # Sync Dashboard via API
-          aws grafana create-dashboard --workspace-id $WS_ID --definition file://dashboards/business-metrics.json
+          # Condition C: Dashboard as Code
+          aws managed-grafana create-dashboard \
+            --workspace-id $WS_ID \
+            --definition file://dashboards/business-metrics.json
