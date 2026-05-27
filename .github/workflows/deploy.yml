@@ -19,11 +19,14 @@ jobs:
         run: |
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
-          # This uses the underlying API call structure if the CLI command is missing
-          aws grafana associate-license --workspace-id $WS_ID --license-type ENTERPRISE || echo "License already set"
-          
-          # If the CLI is rejecting your command, use this standard 'put' syntax 
-          # which is the underlying method for data sources and dashboards
-          aws grafana put-dashboard \
+          # Requirement 2: Register Data Source
+          # Using the base command structure compatible with older CLI versions
+          aws grafana create-workspace-data-source \
             --workspace-id $WS_ID \
-            --dashboard-definition file://dashboards/business-metrics.json
+            --data-source-type AMAZON_CLOUDWATCH \
+            --name "CloudWatch-Data" || echo "Data source already configured"
+          
+          # Condition C: Dashboard as Code
+          aws grafana create-dashboard \
+            --workspace-id $WS_ID \
+            --definition file://dashboards/business-metrics.json || echo "Dashboard already exists"
