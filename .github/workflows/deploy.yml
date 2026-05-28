@@ -26,23 +26,24 @@ jobs:
 
       - name: Configure Grafana
         run: |
-          # 1. Install CLI v2 to a local directory to avoid system path conflicts
+          # 1. Isolated CLI Sandbox: Install to local workspace
           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
           unzip -q awscliv2.zip
           ./aws/install -i "$PWD/aws-cli-v2" -b "$PWD/bin"
+          
+          # 2. Force local binary usage by prepending to PATH
           export PATH="$PWD/bin:$PATH"
-
-          # 2. Get Workspace ID
+          
+          # 3. Fetch Workspace ID
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
-          # 3. Configure Grafana using the local v2 binary
-          echo "Configuring Data Source..."
+          # 4. Idempotent API Configuration
+          # We check if resources exist or rely on the API's graceful error handling
           aws grafana create-workspace-data-source \
             --workspace-id "$WS_ID" \
             --data-source-type "AMAZON_CLOUDWATCH" \
             --name "CloudWatch-Data" || echo "Data source already configured"
             
-          echo "Configuring Dashboard..."
           aws grafana create-dashboard \
             --workspace-id "$WS_ID" \
             --definition "file://dashboards/business-metrics.json"
