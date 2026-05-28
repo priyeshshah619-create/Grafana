@@ -2,7 +2,31 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Full Observability Stack'
 
 Resources:
-  # 1. Managed Grafana Workspace
+  # 1. IAM Role for the Lambda
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: [lambda.amazonaws.com]}
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: GrafanaPluginPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - grafana:UpdateWorkspaceConfiguration
+                  - grafana:DescribeWorkspaceConfiguration
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  # 2. Managed Grafana Workspace
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
@@ -12,7 +36,7 @@ Resources:
       Name: ObservabilityStack
       RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
 
-  # 2. Plugin Installer Lambda (Condition A & B)
+  # 3. Plugin Installer Lambda
   PluginInstallerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -35,9 +59,7 @@ Resources:
                           "pluginAdminEnabled": True,
                           "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]
                       },
-                      "unifiedAlerting": {
-                          "enabled": True
-                      }
+                      "unifiedAlerting": { "enabled": True }
                   }
                   client.update_workspace_configuration(
                       workspaceId=workspace_id,
@@ -48,10 +70,10 @@ Resources:
                   print(f"CRITICAL ERROR: {str(e)}")
                   cfnresponse.send(event, context, cfnresponse.FAILED, {"Reason": str(e)})
 
-  # 3. Custom Resource to Trigger Installation
+  # 4. Custom Resource to Trigger Installation
   InstallPlugins:
     Type: Custom::GrafanaPlugin
     Properties:
       ServiceToken: !GetAtt PluginInstallerFunction.Arn
       WorkspaceId: !Ref GrafanaWorkspace
-      Version: "1.2" # Increment this to force Lambda re-execution
+      Version: "1.2"
