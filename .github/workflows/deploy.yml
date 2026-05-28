@@ -37,15 +37,19 @@ jobs:
       # 3. Configure Grafana (API Automation)
       - name: Configure Grafana
         run: |
+          # Force update the AWS CLI to support 'grafana' commands
+          pip install --upgrade awscli
+          
+          # Get Workspace ID from the core stack
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
-          # Requirement 2: Register Data Source
+          # Register Data Source
           aws grafana create-workspace-data-source \
             --workspace-id $WS_ID \
             --data-source-type AMAZON_CLOUDWATCH \
             --name "CloudWatch-Data" || echo "Data source already configured"
             
-          # Condition C: Dashboard as Code
+          # Register Dashboard
           aws grafana create-dashboard \
             --workspace-id $WS_ID \
             --definition file://dashboards/business-metrics.json || echo "Dashboard already exists"
