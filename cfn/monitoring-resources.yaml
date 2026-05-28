@@ -1,47 +1,39 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Enterprise Observability Extensions - Alerts, SNS, and Dashboards'
-
 Resources:
-  # Requirement 3: SNS Topic for alerts
+  # Plugin Installer Lambda
+  PluginInstallerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.9
+      Role: !GetAtt LambdaRole.Arn
+      Code:
+        # Note: In CI/CD, you can use S3 or inline. For simplicity:
+        ZipFile: |
+          # Paste content of plugin-installer.py here
+  
+  PluginInstaller:
+    Type: Custom::GrafanaPlugin
+    Properties:
+      ServiceToken: !GetAtt PluginInstallerFunction.Arn
+      WorkspaceId: !ImportValue WorkspaceId # Ensure main.yaml exports this
+
+  # SNS Setup (Managed)
   AlertSNSTopic:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: GrafanaAlertNotifications
 
-  # Requirement 3: Native CloudWatch Dashboard
-  BusinessDashboard:
-    Type: AWS::CloudWatch::Dashboard
+  AlertSubscription:
+    Type: AWS::SNS::Subscription
     Properties:
-      DashboardName: BusinessMetricsOverview
-      DashboardBody: >
-        {
-          "widgets": [
-            {
-              "type": "metric",
-              "width": 12,
-              "height": 6,
-              "properties": {
-                "metrics": [ ["BusinessMetrics", "Latency"] ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "us-east-1",
-                "title": "Application Latency Impact"
-              }
-            }
-          ]
-        }
+      Protocol: email
+      TopicArn: !Ref AlertSNSTopic
+      Endpoint: "priyesh.shah619@gmail.com" # Replace with your email
 
-  # Requirement 3: Alert rule for high latency
+  # Existing Alarm...
   HighLatencyAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: HighLatencyBusinessImpact
-      MetricName: Latency
-      Namespace: BusinessMetrics
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 500
-      ComparisonOperator: GreaterThanThreshold
-      AlarmActions:
-        - !Ref AlertSNSTopic
+      AlarmActions: [!Ref AlertSNSTopic]
+      # ... rest of your alarm props
