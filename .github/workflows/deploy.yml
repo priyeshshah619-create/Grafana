@@ -29,7 +29,7 @@ jobs:
           GRAFANA_URL: "https://g-1f0dc35846.grafana-workspace.us-east-1.amazonaws.com"
           GRAFANA_TOKEN: ${{ secrets.GRAFANA_API_TOKEN }}
         run: |
-          # 1. Create Data Source via REST API
+          # 1. Create Data Source
           echo "Configuring Data Source..."
           curl -s -X POST "$GRAFANA_URL/api/datasources" \
             -H "Authorization: Bearer $GRAFANA_TOKEN" \
@@ -39,12 +39,13 @@ jobs:
               "type": "cloudwatch",
               "access": "proxy",
               "jsonData": { "defaultRegion": "us-east-1", "authType": "workspace-iam-role" }
-            }' || echo "Data source might already exist."
+            }' || echo "Data source configuration skipped (may already exist)."
 
-          # 2. Upload Dashboard via REST API
+          # 2. Upload Dashboard
           echo "Configuring Dashboard..."
-          # The dashboard JSON needs to be wrapped in the 'dashboard' field for the API
-          jq -n --argfile dash dashboards/business-metrics.json '{dashboard: $dash, overwrite: true}' > payload.json
+          # Correct way to wrap JSON for the Grafana API using standard bash/jq
+          DASHBOARD_JSON=$(cat dashboards/business-metrics.json)
+          jq -n --argjson dash "$DASHBOARD_JSON" '{dashboard: $dash, overwrite: true}' > payload.json
           
           curl -s -X POST "$GRAFANA_URL/api/dashboards/db" \
             -H "Authorization: Bearer $GRAFANA_TOKEN" \
