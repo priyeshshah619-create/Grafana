@@ -7,35 +7,24 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/checkout@v3
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::882352060841:role/GitHubActionsRole
 
-      - name: Deploy Stacks
+      - name: Deploy Main Stack
         run: |
-          # 1. Deploy main stack (untouched)
-          aws cloudformation deploy --template-file cfn/main.yaml --stack-name observability-stack --capabilities CAPABILITY_IAM
-          
-          # 2. Deploy extensions stack with parameter override to fix ValidationError
-          aws cloudformation deploy --template-file cfn/monitoring-resources.yaml --stack-name observability-extensions --capabilities CAPABILITY_IAM --parameter-overrides WorkspaceIdParam="g-1f0dc35846"
+          aws cloudformation deploy \
+            --template-file cfn/main.yaml \
+            --stack-name observability-stack \
+            --capabilities CAPABILITY_IAM
 
-      - name: Configure Grafana
+      - name: Configure Grafana Dashboards
         env:
           GRAFANA_URL: "https://g-1f0dc35846.grafana-workspace.us-east-1.amazonaws.com"
           GRAFANA_TOKEN: ${{ secrets.GRAFANA_API_TOKEN }}
         run: |
-          # Create Data Source
-          curl -s -X POST "$GRAFANA_URL/api/datasources" \
-            -H "Authorization: Bearer $GRAFANA_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"name": "CloudWatch-Data", "type": "cloudwatch", "access": "proxy", "jsonData": { "defaultRegion": "us-east-1", "authType": "workspace-iam-role" } }' || echo "Data source configuration skipped."
-
-          # Upload Dashboard
           DASHBOARD_JSON=$(cat dashboards/business-metrics.json)
           jq -n --argjson dash "$DASHBOARD_JSON" '{dashboard: $dash, overwrite: true}' > payload.json
           curl -s -X POST "$GRAFANA_URL/api/dashboards/db" \
