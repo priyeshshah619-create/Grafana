@@ -5,12 +5,17 @@ on: [push]
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # This ensures the job runs inside the official AWS CLI container
+    container:
+      image: amazon/aws-cli:latest
+      options: --user root
     permissions:
       id-token: write
       contents: read
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -37,19 +42,16 @@ jobs:
       # 3. Configure Grafana (API Automation)
       - name: Configure Grafana
         run: |
-          # Use pre-installed AWS CLI v2. We verify the version to ensure it is v2.
-          aws --version
-          
           # Get Workspace ID from the core stack
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
           # Register Data Source
           aws grafana create-workspace-data-source \
-            --workspace-id $WS_ID \
-            --data-source-type AMAZON_CLOUDWATCH \
+            --workspace-id "$WS_ID" \
+            --data-source-type "AMAZON_CLOUCWATCH" \
             --name "CloudWatch-Data" || echo "Data source already configured"
             
           # Register Dashboard
           aws grafana create-dashboard \
-            --workspace-id $WS_ID \
-            --definition file://dashboards/business-metrics.json
+            --workspace-id "$WS_ID" \
+            --definition "file://dashboards/business-metrics.json"
