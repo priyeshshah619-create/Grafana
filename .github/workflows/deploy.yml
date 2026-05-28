@@ -1,4 +1,5 @@
 name: Deploy Observability
+
 on: [push]
 
 jobs:
@@ -7,25 +8,43 @@ jobs:
     permissions:
       id-token: write
       contents: read
+
     steps:
       - uses: actions/checkout@v3
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::882352060841:role/GitHubActionsRole
 
-      - name: Configure Observability
+      # 1. Deploy Core Infrastructure (Your main.yaml)
+      - name: Deploy Core Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file cfn/main.yaml \
+            --stack-name observability-stack \
+            --capabilities CAPABILITY_IAM
+
+      # 2. Deploy Observability Extensions (New Resources)
+      - name: Deploy Monitoring Resources
+        run: |
+          aws cloudformation deploy \
+            --template-file cfn/monitoring-resources.yaml \
+            --stack-name observability-extensions \
+            --capabilities CAPABILITY_IAM
+
+      # 3. Configure Grafana (API Automation)
+      - name: Configure Grafana
         run: |
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
           # Requirement 2: Register Data Source
-          # Using the base command structure compatible with older CLI versions
           aws grafana create-workspace-data-source \
             --workspace-id $WS_ID \
             --data-source-type AMAZON_CLOUDWATCH \
             --name "CloudWatch-Data" || echo "Data source already configured"
-          
+            
           # Condition C: Dashboard as Code
           aws grafana create-dashboard \
             --workspace-id $WS_ID \
