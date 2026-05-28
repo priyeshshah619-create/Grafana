@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Full Observability Stack'
 
 Resources:
-  # 1. IAM Role for the Grafana Workspace (Required to fix ValidationError)
+  # 1. IAM Role for the Grafana Workspace
   GrafanaWorkspaceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -12,8 +12,7 @@ Resources:
           - Effect: Allow
             Principal: {Service: [grafana.amazonaws.com]}
             Action: ['sts:AssumeRole']
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSGrafanaAccountRole
+      # MANAGED POLICY REMOVED: It was causing the 404/NotFound error
 
   # 2. IAM Role for the Lambda
   LambdaRole:
@@ -89,4 +88,4 @@ Resources:
     Properties:
       ServiceToken: !GetAtt PluginInstallerFunction.Arn
       WorkspaceId: !Ref GrafanaWorkspace
-      Version: "1.2"
+      Version: "1.5"
