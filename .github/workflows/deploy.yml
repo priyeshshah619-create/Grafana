@@ -5,10 +5,6 @@ on: [push]
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # This runs the job inside the official AWS-maintained container
-    container:
-      image: amazon/aws-cli:latest
-      options: --user root
     permissions:
       id-token: write
       contents: read
@@ -39,19 +35,22 @@ jobs:
             --stack-name observability-extensions \
             --capabilities CAPABILITY_IAM
 
-      # 3. Configure Grafana
+      # 3. Configure Grafana (Fixing the ParamValidation error)
       - name: Configure Grafana
         run: |
-          # Get Workspace ID
+          # The runner's native AWS CLI is often outdated.
+          # We use a simple 'pip' install to ensure we have a version that supports 'grafana' commands.
+          pip install --upgrade awscli
+          
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
-          # Create Data Source
+          # Force the CLI to recognize the command by bypassing the 'aws' binary cache if needed
+          # or simply using the upgraded version
           aws grafana create-workspace-data-source \
             --workspace-id "$WS_ID" \
             --data-source-type "AMAZON_CLOUDWATCH" \
             --name "CloudWatch-Data" || echo "Data source already configured"
             
-          # Create Dashboard
           aws grafana create-dashboard \
             --workspace-id "$WS_ID" \
             --definition "file://dashboards/business-metrics.json"
