@@ -8,19 +8,27 @@ def lambda_handler(event, context):
         return
         
     try:
-        # Explicitly include both the Admin setting and the list of plugin IDs
-        config = {
+        workspace_id = event['ResourceProperties']['WorkspaceId']
+        
+        # Define the complete configuration object
+        config_payload = {
             "plugins": {
                 "pluginAdminEnabled": True,
                 "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]
+            },
+            "unifiedAlerting": {
+                "enabled": True
             }
         }
         
+        print(f"Applying full configuration: {json.dumps(config_payload)}")
+        
         client.update_workspace_configuration(
-            workspaceId=event['ResourceProperties']['WorkspaceId'],
-            configuration=json.dumps(config)
+            workspaceId=workspace_id,
+            configuration=json.dumps(config_payload)
         )
+        
         cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"CRITICAL ERROR: {str(e)}")
         cfnresponse.send(event, context, cfnresponse.FAILED, {"Reason": str(e)})
