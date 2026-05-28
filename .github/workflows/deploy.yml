@@ -19,36 +19,21 @@ jobs:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::882352060841:role/GitHubActionsRole
 
-      # 1. Deploy Core Stack
-      - name: Deploy Core Stack
+      - name: Deploy Stacks
         run: |
-          aws cloudformation deploy \
-            --template-file cfn/main.yaml \
-            --stack-name observability-stack \
-            --capabilities CAPABILITY_IAM
+          aws cloudformation deploy --template-file cfn/main.yaml --stack-name observability-stack --capabilities CAPABILITY_IAM
+          aws cloudformation deploy --template-file cfn/monitoring-resources.yaml --stack-name observability-extensions --capabilities CAPABILITY_IAM
 
-      # 2. Deploy Monitoring Resources
-      - name: Deploy Monitoring Resources
-        run: |
-          aws cloudformation deploy \
-            --template-file cfn/monitoring-resources.yaml \
-            --stack-name observability-extensions \
-            --capabilities CAPABILITY_IAM
-
-      # 3. Configure Grafana (Clean API Automation)
       - name: Configure Grafana
         run: |
-          # The native AWS CLI v2 is already installed. 
-          # We do NOT run 'pip install' to avoid downgrading the CLI.
-          
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
-          # Use local 'aws' binary which is v2 on ubuntu-latest
-          aws grafana create-workspace-data-source \
+          # Force use of the Python module directly to bypass the 'aws' binary path issues
+          python3 -m awscli grafana create-workspace-data-source \
             --workspace-id "$WS_ID" \
             --data-source-type "AMAZON_CLOUDWATCH" \
             --name "CloudWatch-Data" || echo "Data source already configured"
             
-          aws grafana create-dashboard \
+          python3 -m awscli grafana create-dashboard \
             --workspace-id "$WS_ID" \
             --definition "file://dashboards/business-metrics.json"
