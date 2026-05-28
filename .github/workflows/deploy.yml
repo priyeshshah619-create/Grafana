@@ -19,30 +19,30 @@ jobs:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::882352060841:role/GitHubActionsRole
 
-      # 1. Deploy Stacks (This remains untouched and safe)
       - name: Deploy Stacks
         run: |
           aws cloudformation deploy --template-file cfn/main.yaml --stack-name observability-stack --capabilities CAPABILITY_IAM
           aws cloudformation deploy --template-file cfn/monitoring-resources.yaml --stack-name observability-extensions --capabilities CAPABILITY_IAM
 
-      # 2. Setup AWS CLI v2 explicitly
-      - name: Install AWS CLI v2
-        run: |
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          sudo ./aws/install --update
-
-      # 3. Configure Grafana
       - name: Configure Grafana
         run: |
+          # 1. Install CLI v2 to a local directory to avoid system path conflicts
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -q awscliv2.zip
+          ./aws/install -i "$PWD/aws-cli-v2" -b "$PWD/bin"
+          export PATH="$PWD/bin:$PATH"
+
+          # 2. Get Workspace ID
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
-          # Using the freshly installed v2 CLI
+          # 3. Configure Grafana using the local v2 binary
+          echo "Configuring Data Source..."
           aws grafana create-workspace-data-source \
             --workspace-id "$WS_ID" \
             --data-source-type "AMAZON_CLOUDWATCH" \
             --name "CloudWatch-Data" || echo "Data source already configured"
             
+          echo "Configuring Dashboard..."
           aws grafana create-dashboard \
             --workspace-id "$WS_ID" \
             --definition "file://dashboards/business-metrics.json"
