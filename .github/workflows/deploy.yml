@@ -35,17 +35,15 @@ jobs:
             --stack-name observability-extensions \
             --capabilities CAPABILITY_IAM
 
-      # 3. Configure Grafana (Fixing the ParamValidation error)
+      # 3. Configure Grafana (Clean API Automation)
       - name: Configure Grafana
         run: |
-          # The runner's native AWS CLI is often outdated.
-          # We use a simple 'pip' install to ensure we have a version that supports 'grafana' commands.
-          pip install --upgrade awscli
+          # The native AWS CLI v2 is already installed. 
+          # We do NOT run 'pip install' to avoid downgrading the CLI.
           
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
-          # Force the CLI to recognize the command by bypassing the 'aws' binary cache if needed
-          # or simply using the upgraded version
+          # Use local 'aws' binary which is v2 on ubuntu-latest
           aws grafana create-workspace-data-source \
             --workspace-id "$WS_ID" \
             --data-source-type "AMAZON_CLOUDWATCH" \
