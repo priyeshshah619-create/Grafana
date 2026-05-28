@@ -13,11 +13,11 @@ Resources:
       RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
 
   # 2. CloudWatch Data Source (Requirement 7)
-  GrafanaDataSource:
-    Type: AWS::Grafana::DataSource
-    Properties:
-      DataSourceType: AMAZON_CLOUDWATCH
-      WorkspaceId: !Ref GrafanaWorkspace
+#  GrafanaDataSource:
+ #   Type: AWS::Grafana::DataSource
+  #  Properties:
+   #   DataSourceType: AMAZON_CLOUDWATCH
+    #  WorkspaceId: !Ref GrafanaWorkspace
 
   # 3. Custom Resource for Plugin Installation (Condition A)
   InstallPlugins:
