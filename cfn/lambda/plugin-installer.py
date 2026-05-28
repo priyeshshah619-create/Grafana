@@ -8,19 +8,19 @@ def lambda_handler(event, context):
         return
         
     try:
-        # Define the plugins you want to ensure are installed
-        plugins_to_install = ["grafana-piechart-panel", "grafana-clock-panel"]
+        # Explicitly include both the Admin setting and the list of plugin IDs
+        config = {
+            "plugins": {
+                "pluginAdminEnabled": True,
+                "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]
+            }
+        }
         
-        # Update the workspace configuration
         client.update_workspace_configuration(
             workspaceId=event['ResourceProperties']['WorkspaceId'],
-            configuration=json.dumps({
-                "plugins": {
-                    "pluginIds": plugins_to_install
-                }
-            })
+            configuration=json.dumps(config)
         )
         cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
     except Exception as e:
-        print(f"Error installing plugins: {str(e)}")
+        print(f"Error: {str(e)}")
         cfnresponse.send(event, context, cfnresponse.FAILED, {"Reason": str(e)})
