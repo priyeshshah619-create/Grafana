@@ -25,25 +25,28 @@ jobs:
           aws cloudformation deploy --template-file cfn/monitoring-resources.yaml --stack-name observability-extensions --capabilities CAPABILITY_IAM
 
       - name: Configure Grafana
+        env:
+          GRAFANA_URL: "https://g-1f0dc35846.grafana-workspace.us-east-1.amazonaws.com"
+          GRAFANA_TOKEN: ${{ secrets.GRAFANA_API_TOKEN }}
         run: |
-          # 1. Isolated CLI Sandbox: Install to local workspace
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip -q awscliv2.zip
-          ./aws/install -i "$PWD/aws-cli-v2" -b "$PWD/bin"
+          # 1. Create Data Source via REST API
+          echo "Configuring Data Source..."
+          curl -s -X POST "$GRAFANA_URL/api/datasources" \
+            -H "Authorization: Bearer $GRAFANA_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "CloudWatch-Data",
+              "type": "cloudwatch",
+              "access": "proxy",
+              "jsonData": { "defaultRegion": "us-east-1", "authType": "workspace-iam-role" }
+            }' || echo "Data source might already exist."
+
+          # 2. Upload Dashboard via REST API
+          echo "Configuring Dashboard..."
+          # The dashboard JSON needs to be wrapped in the 'dashboard' field for the API
+          jq -n --argfile dash dashboards/business-metrics.json '{dashboard: $dash, overwrite: true}' > payload.json
           
-          # 2. Force local binary usage by prepending to PATH
-          export PATH="$PWD/bin:$PATH"
-          
-          # 3. Fetch Workspace ID
-          WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
-          
-          # 4. Idempotent API Configuration
-          # We check if resources exist or rely on the API's graceful error handling
-          aws grafana create-workspace-data-source \
-            --workspace-id "$WS_ID" \
-            --data-source-type "AMAZON_CLOUDWATCH" \
-            --name "CloudWatch-Data" || echo "Data source already configured"
-            
-          aws grafana create-dashboard \
-            --workspace-id "$WS_ID" \
-            --definition "file://dashboards/business-metrics.json"
+          curl -s -X POST "$GRAFANA_URL/api/dashboards/db" \
+            -H "Authorization: Bearer $GRAFANA_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d @payload.json
