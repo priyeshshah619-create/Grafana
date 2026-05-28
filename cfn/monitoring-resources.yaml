@@ -1,24 +1,61 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Resources:
-  # Plugin Installer Lambda
+  # 1. Define the Role LOCALLY to resolve the 'undefined resource' error
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: GrafanaPluginPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - "grafana:UpdateWorkspaceConfiguration"
+                  - "grafana:DescribeWorkspaceConfiguration"
+                Resource: "*"
+
+  # 2. Plugin Installer Function
   PluginInstallerFunction:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.lambda_handler
       Runtime: python3.9
       Role: !GetAtt LambdaRole.Arn
+      Timeout: 60
       Code:
-        # Note: In CI/CD, you can use S3 or inline. For simplicity:
         ZipFile: |
-          # Paste content of plugin-installer.py here
-  
+          import boto3, cfnresponse, json
+          client = boto3.client('grafana')
+          def lambda_handler(event, context):
+              if event['RequestType'] == 'Delete':
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return
+              try:
+                  client.update_workspace_configuration(
+                      workspaceId=event['ResourceProperties']['WorkspaceId'],
+                      configuration=json.dumps({"plugins": {"pluginIds": ["grafana-clock-panel", "grafana-piechart-panel"]}})
+                  )
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {"Reason": str(e)})
+
+  # 3. Custom Resource
   PluginInstaller:
     Type: Custom::GrafanaPlugin
     Properties:
       ServiceToken: !GetAtt PluginInstallerFunction.Arn
-      WorkspaceId: !ImportValue WorkspaceId # Ensure main.yaml exports this
+      WorkspaceId: !ImportValue WorkspaceId
 
-  # SNS Setup (Managed)
+  # 4. Managed SNS Topic & Subscription
   AlertSNSTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -29,11 +66,11 @@ Resources:
     Properties:
       Protocol: email
       TopicArn: !Ref AlertSNSTopic
-      Endpoint: "priyesh.shah619@gmail.com" # Replace with your email
+      Endpoint: "priyesh.shah619@gmail.com"
 
-  # Existing Alarm...
+  # Existing Alarm
   HighLatencyAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmActions: [!Ref AlertSNSTopic]
-      # ... rest of your alarm props
+      # ... Ensure rest of your alarm props match your existing requirements
