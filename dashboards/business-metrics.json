@@ -1,0 +1,27 @@
+{
+  "title": "Business Metrics Dashboard",
+  "uid": "business-metrics-001",
+  "schemaVersion": 35,
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Latency (Business Impact)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(http_requests_total[5m])",
+          "legendFormat": "Request Rate"
+        }
+      ],
+      "yaxes": [{ "format": "short" }, { "format": "short" }]
+    },
+    {
+      "type": "alertlist",
+      "title": "Active Business Alerts",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "options": { "alertName": "High Latency Alert" }
+    }
+  ],
+  "message": "Managed by CI/CD Pipeline - Observability v1.0"
+}
