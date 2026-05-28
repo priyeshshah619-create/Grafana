@@ -5,10 +5,6 @@ on: [push]
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # This ensures the job runs inside the official AWS CLI container
-    container:
-      image: amazon/aws-cli:latest
-      options: --user root
     permissions:
       id-token: write
       contents: read
@@ -23,7 +19,14 @@ jobs:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::882352060841:role/GitHubActionsRole
 
-      # 1. Deploy Core Infrastructure (Your main.yaml)
+      # Install AWS CLI v2 explicitly to avoid version conflicts
+      - name: Install AWS CLI
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install --update
+
+      # 1. Deploy Core Stack
       - name: Deploy Core Stack
         run: |
           aws cloudformation deploy \
@@ -31,7 +34,7 @@ jobs:
             --stack-name observability-stack \
             --capabilities CAPABILITY_IAM
 
-      # 2. Deploy Observability Extensions (New Resources)
+      # 2. Deploy Monitoring Resources
       - name: Deploy Monitoring Resources
         run: |
           aws cloudformation deploy \
@@ -39,19 +42,16 @@ jobs:
             --stack-name observability-extensions \
             --capabilities CAPABILITY_IAM
 
-      # 3. Configure Grafana (API Automation)
+      # 3. Configure Grafana
       - name: Configure Grafana
         run: |
-          # Get Workspace ID from the core stack
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
-          # Register Data Source
           aws grafana create-workspace-data-source \
             --workspace-id "$WS_ID" \
-            --data-source-type "AMAZON_CLOUCWATCH" \
+            --data-source-type "AMAZON_CLOUDWATCH" \
             --name "CloudWatch-Data" || echo "Data source already configured"
             
-          # Register Dashboard
           aws grafana create-dashboard \
             --workspace-id "$WS_ID" \
             --definition "file://dashboards/business-metrics.json"
