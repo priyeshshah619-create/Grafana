@@ -53,7 +53,7 @@ Resources:
     Type: Custom::GrafanaPlugin
     Properties:
       ServiceToken: !GetAtt PluginInstallerFunction.Arn
-      WorkspaceId: !ImportValue WorkspaceId
+      WorkspaceId: "g-1f0dc35846"
 
   # 4. Managed SNS Topic & Subscription
   AlertSNSTopic:
