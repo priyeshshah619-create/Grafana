@@ -31,3 +31,4 @@ jobs:
             -H "Authorization: Bearer $GRAFANA_TOKEN" \
             -H "Content-Type: application/json" \
             -d @payload.json
+ 
