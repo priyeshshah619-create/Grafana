@@ -1,6 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  WorkspaceIdParam:
+    Type: String
+    Description: "The ID of the Managed Grafana Workspace"
+
 Resources:
-  # 1. Define the Role LOCALLY to resolve the 'undefined resource' error
+  # Self-contained IAM Role
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -23,7 +29,7 @@ Resources:
                   - "grafana:DescribeWorkspaceConfiguration"
                 Resource: "*"
 
-  # 2. Plugin Installer Function
+  # Plugin Installer Function
   PluginInstallerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -48,14 +54,14 @@ Resources:
               except Exception as e:
                   cfnresponse.send(event, context, cfnresponse.FAILED, {"Reason": str(e)})
 
-  # 3. Custom Resource
+  # Custom Resource using parameter
   PluginInstaller:
     Type: Custom::GrafanaPlugin
     Properties:
       ServiceToken: !GetAtt PluginInstallerFunction.Arn
-      WorkspaceId: "g-1f0dc35846"
+      WorkspaceId: !Ref WorkspaceIdParam
 
-  # 4. Managed SNS Topic & Subscription
+  # SNS Resources
   AlertSNSTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -68,9 +74,16 @@ Resources:
       TopicArn: !Ref AlertSNSTopic
       Endpoint: "priyesh.shah619@gmail.com"
 
-  # Existing Alarm
+  # CloudWatch Alarm
   HighLatencyAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
+      AlarmName: "High-Latency-Business-Alert"
+      MetricName: "Latency"
+      Namespace: "BusinessMetrics"
+      Statistic: "Average"
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 500
+      ComparisonOperator: GreaterThanThreshold
       AlarmActions: [!Ref AlertSNSTopic]
-      # ... Ensure rest of your alarm props match your existing requirements
