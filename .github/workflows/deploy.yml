@@ -19,21 +19,30 @@ jobs:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::882352060841:role/GitHubActionsRole
 
+      # 1. Deploy Stacks (This remains untouched and safe)
       - name: Deploy Stacks
         run: |
           aws cloudformation deploy --template-file cfn/main.yaml --stack-name observability-stack --capabilities CAPABILITY_IAM
           aws cloudformation deploy --template-file cfn/monitoring-resources.yaml --stack-name observability-extensions --capabilities CAPABILITY_IAM
 
+      # 2. Setup AWS CLI v2 explicitly
+      - name: Install AWS CLI v2
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install --update
+
+      # 3. Configure Grafana
       - name: Configure Grafana
         run: |
           WS_ID=$(aws cloudformation describe-stacks --stack-name observability-stack --query 'Stacks[0].Outputs[?OutputKey==`WorkspaceId`].OutputValue' --output text)
           
-          # Force use of the Python module directly to bypass the 'aws' binary path issues
-          python3 -m awscli grafana create-workspace-data-source \
+          # Using the freshly installed v2 CLI
+          aws grafana create-workspace-data-source \
             --workspace-id "$WS_ID" \
             --data-source-type "AMAZON_CLOUDWATCH" \
             --name "CloudWatch-Data" || echo "Data source already configured"
             
-          python3 -m awscli grafana create-dashboard \
+          aws grafana create-dashboard \
             --workspace-id "$WS_ID" \
             --definition "file://dashboards/business-metrics.json"
