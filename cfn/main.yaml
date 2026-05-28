@@ -2,7 +2,20 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Full Observability Stack'
 
 Resources:
-  # 1. IAM Role for the Lambda
+  # 1. IAM Role for the Grafana Workspace (Required to fix ValidationError)
+  GrafanaWorkspaceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: [grafana.amazonaws.com]}
+            Action: ['sts:AssumeRole']
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGrafanaAccountRole
+
+  # 2. IAM Role for the Lambda
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -26,7 +39,7 @@ Resources:
                   - logs:PutLogEvents
                 Resource: "*"
 
-  # 2. Managed Grafana Workspace
+  # 3. Managed Grafana Workspace
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
@@ -36,7 +49,7 @@ Resources:
       Name: ObservabilityStack
       RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
 
-  # 3. Plugin Installer Lambda
+  # 4. Plugin Installer Lambda
   PluginInstallerFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -70,7 +83,7 @@ Resources:
                   print(f"CRITICAL ERROR: {str(e)}")
                   cfnresponse.send(event, context, cfnresponse.FAILED, {"Reason": str(e)})
 
-  # 4. Custom Resource to Trigger Installation
+  # 5. Custom Resource to Trigger Installation
   InstallPlugins:
     Type: Custom::GrafanaPlugin
     Properties:
