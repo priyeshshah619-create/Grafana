@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Full Observability Stack (Managed Grafana + CloudWatch)
+Description: Full Observability Stack
 
 Resources:
   # 1. Managed Grafana Workspace
@@ -12,46 +12,58 @@ Resources:
       Name: ObservabilityStack
       RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
 
-  # 2. CloudWatch Data Source (Requirement 7)
-#  GrafanaDataSource:
- #   Type: AWS::Grafana::DataSource
-  #  Properties:
-   #   DataSourceType: AMAZON_CLOUDWATCH
-    #  WorkspaceId: !Ref GrafanaWorkspace
+  # 2. Plugin Installer Lambda (Condition A & B)
+  PluginInstallerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.9
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3, cfnresponse, json
+          client = boto3.client('grafana')
+          def lambda_handler(event, context):
+              if event['RequestType'] == 'Delete':
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return
+              try:
+                  client.update_workspace_configuration(
+                      workspaceId=event['ResourceProperties']['WorkspaceId'],
+                      configuration=json.dumps({"plugins": {"pluginIds": ["grafana-clock-panel", "grafana-piechart-panel"]}})
+                  )
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {"Reason": str(e)})
 
-  # 3. Custom Resource for Plugin Installation (Condition A)
+  # 3. Custom Resource Trigger (Condition A)
   InstallPlugins:
     Type: Custom::GrafanaPlugin
     Properties:
       ServiceToken: !GetAtt PluginInstallerFunction.Arn
       WorkspaceId: !Ref GrafanaWorkspace
 
-  PluginInstallerFunction:
-    Type: AWS::Lambda::Function
+  # 4. Observability: SNS & CloudWatch Alarms (Requirement 2 & 3)
+  AlertSNSTopic:
+    Type: AWS::SNS::Topic
     Properties:
-      Handler: index.lambda_handler
-      Runtime: python3.11
-      Role: !GetAtt LambdaRole.Arn
-      Timeout: 60
-      Code:
-        ZipFile: |
-          import json, urllib3, boto3
-          http = urllib3.PoolManager()
-          def lambda_handler(event, context):
-              if event['RequestType'] == 'Delete':
-                  return
-              try:
-                  client = boto3.client('grafana')
-                  client.update_workspace_configuration(
-                      workspaceId=event['ResourceProperties']['WorkspaceId'], 
-                      configuration=json.dumps({"plugins": {"pluginAdminEnabled": True}})
-                  )
-                  # Send success back to CloudFormation
-                  resp = {"Status": "SUCCESS", "PhysicalResourceId": "GrafanaPlugin"}
-              except Exception as e:
-                  resp = {"Status": "FAILED", "Reason": str(e)}
-              http.request('PUT', event['ResponseURL'], body=json.dumps(resp), headers={'content-type': '', 'content-length': '0'})
+      TopicName: GrafanaAlertNotifications
 
+  HighLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: High-Latency-Business-Alert
+      MetricName: Latency
+      Namespace: BusinessMetrics
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 500
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: [!Ref AlertSNSTopic]
+
+  # IAM Roles
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
