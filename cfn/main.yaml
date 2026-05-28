@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Full Observability Stack
+Description: 'Full Observability Stack'
 
 Resources:
   # 1. Managed Grafana Workspace
@@ -29,61 +29,29 @@ Resources:
                   cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
                   return
               try:
+                  workspace_id = event['ResourceProperties']['WorkspaceId']
+                  config_payload = {
+                      "plugins": {
+                          "pluginAdminEnabled": True,
+                          "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]
+                      },
+                      "unifiedAlerting": {
+                          "enabled": True
+                      }
+                  }
                   client.update_workspace_configuration(
-                      workspaceId=event['ResourceProperties']['WorkspaceId'],
-                      configuration=json.dumps({"plugins": {"pluginIds": ["grafana-clock-panel", "grafana-piechart-panel"]}})
+                      workspaceId=workspace_id,
+                      configuration=json.dumps(config_payload)
                   )
                   cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
               except Exception as e:
+                  print(f"CRITICAL ERROR: {str(e)}")
                   cfnresponse.send(event, context, cfnresponse.FAILED, {"Reason": str(e)})
 
-  # 3. Custom Resource Trigger (Condition A)
+  # 3. Custom Resource to Trigger Installation
   InstallPlugins:
     Type: Custom::GrafanaPlugin
     Properties:
       ServiceToken: !GetAtt PluginInstallerFunction.Arn
       WorkspaceId: !Ref GrafanaWorkspace
-
-  # 4. Observability: SNS & CloudWatch Alarms (Requirement 2 & 3)
-  AlertSNSTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: GrafanaAlertNotifications
-
-  HighLatencyAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: High-Latency-Business-Alert
-      MetricName: Latency
-      Namespace: BusinessMetrics
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 500
-      ComparisonOperator: GreaterThanThreshold
-      AlarmActions: [!Ref AlertSNSTopic]
-
-  # IAM Roles
-  LambdaRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}]
-      ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole]
-      Policies:
-        - PolicyName: GrafanaPluginPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement: [{Effect: Allow, Action: ["grafana:UpdateWorkspaceConfiguration"], Resource: "*"}]
-
-  GrafanaWorkspaceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement: [{Effect: Allow, Principal: {Service: grafana.amazonaws.com}, Action: sts:AssumeRole}]
-
-Outputs:
-  WorkspaceId:
-    Value: !Ref GrafanaWorkspace
+      Version: "1.2" # Increment this to force Lambda re-execution
