@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Enterprise Observability Extensions - Alerts, SNS, and Dashboards'
+
+Resources:
+  # Requirement 3: SNS Topic for alerts
+  AlertSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: GrafanaAlertNotifications
+
+  # Requirement 3: Native CloudWatch Dashboard
+  BusinessDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: BusinessMetricsOverview
+      DashboardBody: >
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [ ["BusinessMetrics", "Latency"] ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "us-east-1",
+                "title": "Application Latency Impact"
+              }
+            }
+          ]
+        }
+
+  # Requirement 3: Alert rule for high latency
+  HighLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: HighLatencyBusinessImpact
+      MetricName: Latency
+      Namespace: BusinessMetrics
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 500
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlertSNSTopic
