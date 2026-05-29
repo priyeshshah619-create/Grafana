@@ -6,7 +6,8 @@ def cfn_send(event, context, status, data, reason=None):
     response_body = {
         'Status': status,
         'Reason': reason or "Success",
-        'PhysicalResourceId': event.get('PhysicalResourceId', 'PluginUpdater'),
+        # Custom Resource ke liye PhysicalResourceId unique hona chahiye
+        'PhysicalResourceId': event.get('PhysicalResourceId', 'GrafanaPluginConfig'),
         'StackId': event['StackId'],
         'RequestId': event['RequestId'],
         'LogicalResourceId': event['LogicalResourceId'],
@@ -23,8 +24,11 @@ def lambda_handler(event, context):
             return
         
         client = boto3.client('grafana')
+        workspace_id = event['ResourceProperties']['WorkspaceId']
+        
+        # Plugin Config
         config = {"plugins": {"pluginAdminEnabled": True, "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]}}
-        client.update_workspace_configuration(workspaceId=event['ResourceProperties']['WorkspaceId'], configuration=json.dumps(config))
+        client.update_workspace_configuration(workspaceId=workspace_id, configuration=json.dumps(config))
         
         cfn_send(event, context, 'SUCCESS', {"Status": "Finished"})
     except Exception as e:
