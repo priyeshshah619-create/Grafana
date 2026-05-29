@@ -2,7 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Observability Stack with SNS Notifications and Plugin Automation'
 
 Resources:
-  # SNS Topic for Grafana Alerts
   AlertSNSTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -30,6 +29,7 @@ Resources:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
                   - 'sns:Publish'
+                  - 'cloudwatch:PutDashboard'
                 Resource: '*'
 
   GrafanaWorkspace:
@@ -40,6 +40,26 @@ Resources:
       AuthenticationProviders: [AWS_SSO]
       PermissionType: SERVICE_MANAGED
       RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
+
+  CloudWatchBusinessDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: Business-Metrics-Dashboard
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [ [ "BusinessMetrics/Application", "RequestCount" ] ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Application Request Count"
+              }
+            }
+          ]
+        }
 
   PluginUpdaterFunction:
     Type: AWS::Lambda::Function
@@ -59,7 +79,6 @@ Resources:
               try:
                   if event['RequestType'] == 'Delete': cfn_send(event, context, 'SUCCESS', {}); return
                   client = boto3.client('grafana')
-                  # Plugin configuration for Business Driven Monitoring
                   config = {"plugins": {"pluginAdminEnabled": True, "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]}}
                   client.update_workspace_configuration(workspaceId=event['ResourceProperties']['WorkspaceId'], configuration=json.dumps(config))
                   cfn_send(event, context, 'SUCCESS', {"Status": "Finished"})
@@ -68,7 +87,7 @@ Resources:
 
   EnablePluginsCustomResource:
     Type: AWS::CloudFormation::CustomResource
-    DependsOn: GrafanaWorkspace
+    DependsOn: [GrafanaWorkspace, CloudWatchBusinessDashboard]
     Properties:
       ServiceToken: !GetAtt PluginUpdaterFunction.Arn
       WorkspaceId: !Ref GrafanaWorkspace
