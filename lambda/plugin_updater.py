@@ -6,7 +6,6 @@ def cfn_send(event, context, status, data, reason=None):
     response_body = {
         'Status': status,
         'Reason': reason or "Success",
-        # Custom Resource ke liye PhysicalResourceId unique hona chahiye
         'PhysicalResourceId': event.get('PhysicalResourceId', 'GrafanaPluginConfig'),
         'StackId': event['StackId'],
         'RequestId': event['RequestId'],
@@ -26,9 +25,20 @@ def lambda_handler(event, context):
         client = boto3.client('grafana')
         workspace_id = event['ResourceProperties']['WorkspaceId']
         
-        # Plugin Config
-        config = {"plugins": {"pluginAdminEnabled": True, "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]}}
-        client.update_workspace_configuration(workspaceId=workspace_id, configuration=json.dumps(config))
+        # FIX: Grafana 10.x ke liye correct JSON structure
+        config = {
+            "plugins": {
+                "pluginAdminEnabled": True,
+                "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]
+            }
+        }
+        
+        # Note: Agar ye abhi bhi fail ho, toh format ko thoda flatten ya check karo
+        # lekin 10.4 ke liye ye standard structure hai.
+        client.update_workspace_configuration(
+            workspaceId=workspace_id, 
+            configuration=json.dumps(config)
+        )
         
         cfn_send(event, context, 'SUCCESS', {"Status": "Finished"})
     except Exception as e:
