@@ -13,22 +13,20 @@ jobs:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::882352060841:role/GitHubActionsRole
       - name: Deploy Main Stack
-        run: |
-          aws cloudformation deploy --template-file cfn/main.yaml --stack-name observability-stack --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
-      - name: Wait for Grafana to be ready
-        run: sleep 90
-      - name: Configure Grafana Dashboards
+        run: aws cloudformation deploy --template-file cfn/main.yaml --stack-name observability-stack --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+      - name: Configure Grafana
         env:
           GRAFANA_URL: "https://g-d190288ff4.grafana-workspace.us-east-1.amazonaws.com"
           GRAFANA_TOKEN: ${{ secrets.GRAFANA_API_TOKEN }}
         run: |
+          # 1. Dashboard
           DASHBOARD_JSON=$(cat dashboards/business-metrics.json)
           jq -n --argjson dash "$DASHBOARD_JSON" '{dashboard: $dash, overwrite: true}' > payload.json
           curl -s -X POST "$GRAFANA_URL/api/dashboards/db" -H "Authorization: Bearer $GRAFANA_TOKEN" -H "Content-Type: application/json" -d @payload.json
-      - name: Configure Grafana Plugins
-        env:
-          GRAFANA_URL: "https://g-d190288ff4.grafana-workspace.us-east-1.amazonaws.com"
-          GRAFANA_TOKEN: ${{ secrets.GRAFANA_API_TOKEN }}
-        run: |
+          
+          # 2. Contact Point
+          curl -s -X POST "$GRAFANA_URL/api/v1/provisioning/contact-points" -H "Authorization: Bearer $GRAFANA_TOKEN" -H "Content-Type: application/json" \
+          -d '{"name": "Email-Alerts", "type": "email", "settings": {"addresses": "priyesh.shah619@gmail.com"}, "isDefault": true}'
+          
+          # 3. Plugins
           curl -s -X POST "$GRAFANA_URL/api/plugins/grafana-piechart-panel/settings" -H "Authorization: Bearer $GRAFANA_TOKEN" -H "Content-Type: application/json" -d '{"enabled": true}'
-          curl -s -X POST "$GRAFANA_URL/api/plugins/grafana-clock-panel/settings" -H "Authorization: Bearer $GRAFANA_TOKEN" -H "Content-Type: application/json" -d '{"enabled": true}'
