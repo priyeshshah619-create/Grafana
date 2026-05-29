@@ -1,58 +1,43 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: AWS Managed Grafana Base Stack
+Description: 'Clean Observability Stack - Base Infrastructure'
 
 Resources:
+  GrafanaWorkspaceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: GrafanaWorkspaceRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - grafana.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonPrometheusQueryAccess
 
-GrafanaWorkspaceRole:
-Type: AWS::IAM::Role
-Properties:
-RoleName: GrafanaWorkspaceRole
-
-
-  AssumeRolePolicyDocument:
-    Version: '2012-10-17'
-    Statement:
-      - Effect: Allow
-        Principal:
-          Service:
-            - grafana.amazonaws.com
-        Action:
-          - sts:AssumeRole
-
-  ManagedPolicyArns:
-    - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
-    - arn:aws:iam::aws:policy/AmazonPrometheusQueryAccess
-
-
-GrafanaWorkspace:
-Type: AWS::Grafana::Workspace
-Properties:
-Name: enterprise-observability
-
-
-  AccountAccessType: CURRENT_ACCOUNT
-
-  AuthenticationProviders:
-    - AWS_SSO
-
-  PermissionType: SERVICE_MANAGED
-
-  RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
-
-  DataSources:
-    - CLOUDWATCH
-    - PROMETHEUS
-
-  NotificationDestinations:
-    - SNS
-
+  GrafanaWorkspace:
+    Type: AWS::Grafana::Workspace
+    Properties:
+      Name: enterprise-observability
+      AccountAccessType: CURRENT_ACCOUNT
+      AuthenticationProviders:
+        - AWS_SSO
+      PermissionType: SERVICE_MANAGED
+      RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
+      DataSources:
+        - CLOUDWATCH
+        - PROMETHEUS
+      NotificationDestinations:
+        - SNS
 
 Outputs:
-
-GrafanaWorkspaceId:
-Description: Grafana Workspace ID
-Value: !Ref GrafanaWorkspace
-
-GrafanaWorkspaceEndpoint:
-Description: Grafana Workspace Endpoint
-Value: !GetAtt GrafanaWorkspace.Endpoint
+  GrafanaWorkspaceId:
+    Description: Grafana Workspace ID
+    Value: !Ref GrafanaWorkspace
+  GrafanaWorkspaceEndpoint:
+    Description: Grafana Workspace Endpoint
+    Value: !GetAtt GrafanaWorkspace.Endpoint
