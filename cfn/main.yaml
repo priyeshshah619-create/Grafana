@@ -8,6 +8,7 @@ Type: AWS::IAM::Role
 Properties:
 RoleName: GrafanaWorkspaceRole
 
+
   AssumeRolePolicyDocument:
     Version: '2012-10-17'
     Statement:
@@ -22,10 +23,12 @@ RoleName: GrafanaWorkspaceRole
     - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
     - arn:aws:iam::aws:policy/AmazonPrometheusQueryAccess
 
+
 GrafanaWorkspace:
 Type: AWS::Grafana::Workspace
 Properties:
 Name: enterprise-observability
+
 
   AccountAccessType: CURRENT_ACCOUNT
 
@@ -43,10 +46,13 @@ Name: enterprise-observability
   NotificationDestinations:
     - SNS
 
+
 Outputs:
 
 GrafanaWorkspaceId:
+Description: Grafana Workspace ID
 Value: !Ref GrafanaWorkspace
 
 GrafanaWorkspaceEndpoint:
+Description: Grafana Workspace Endpoint
 Value: !GetAtt GrafanaWorkspace.Endpoint
