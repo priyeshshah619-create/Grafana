@@ -21,7 +21,6 @@ def lambda_handler(event, context):
         client = boto3.client('grafana')
         workspace_id = event['ResourceProperties']['WorkspaceId']
         
-        # 10.x ke liye compliant configuration
         config = {
             "plugins": {
                 "pluginAdminEnabled": True,
@@ -29,11 +28,17 @@ def lambda_handler(event, context):
             }
         }
         
+        # Logging the config for debugging purposes
+        config_json = json.dumps(config)
+        print(f"DEBUG: Configuration being sent to Grafana: {config_json}")
+        
         client.update_workspace_configuration(
-            workspaceId=workspace_id, 
-            configuration=json.dumps(config)
+            workspaceId=workspace_id,
+            configuration=config_json
         )
         
         cfn_send(event, context, 'SUCCESS', {"Status": "Finished"})
     except Exception as e:
-        cfn_send(event, context, 'FAILED', {"Error": str(e)}, reason=str(e))
+        error_msg = str(e)
+        print(f"ERROR: {error_msg}")
+        cfn_send(event, context, 'FAILED', {"Error": error_msg}, reason=error_msg)
