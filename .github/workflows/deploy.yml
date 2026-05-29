@@ -19,7 +19,7 @@ jobs:
           aws cloudformation deploy \
             --template-file cfn/main.yaml \
             --stack-name observability-stack \
-            --capabilities CAPABILITY_IAM
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 
       - name: Configure Grafana Dashboards
         env:
