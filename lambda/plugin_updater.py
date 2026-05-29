@@ -18,9 +18,14 @@ def cfn_send(event, context, status, data, reason=None):
 
 def lambda_handler(event, context):
     try:
+        if event['RequestType'] == 'Delete':
+            cfn_send(event, context, 'SUCCESS', {})
+            return
+        
         client = boto3.client('grafana')
         workspace_id = event['ResourceProperties']['WorkspaceId']
         
+        # 10.4 Schema
         config = {
             "plugins": {
                 "pluginAdminEnabled": True,
@@ -28,9 +33,8 @@ def lambda_handler(event, context):
             }
         }
         
-        # Logging the config for debugging purposes
         config_json = json.dumps(config)
-        print(f"DEBUG: Configuration being sent to Grafana: {config_json}")
+        print(f"DEBUG: Payload: {config_json}") # Logs mein dikhega
         
         client.update_workspace_configuration(
             workspaceId=workspace_id,
@@ -39,6 +43,6 @@ def lambda_handler(event, context):
         
         cfn_send(event, context, 'SUCCESS', {"Status": "Finished"})
     except Exception as e:
-        error_msg = str(e)
-        print(f"ERROR: {error_msg}")
-        cfn_send(event, context, 'FAILED', {"Error": error_msg}, reason=error_msg)
+        error_str = str(e)
+        print(f"ERROR: {error_str}") # Logs mein dikhega
+        cfn_send(event, context, 'FAILED', {"Error": error_str}, reason=error_str)
