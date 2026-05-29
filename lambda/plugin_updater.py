@@ -18,14 +18,10 @@ def cfn_send(event, context, status, data, reason=None):
 
 def lambda_handler(event, context):
     try:
-        if event['RequestType'] == 'Delete':
-            cfn_send(event, context, 'SUCCESS', {})
-            return
-        
         client = boto3.client('grafana')
         workspace_id = event['ResourceProperties']['WorkspaceId']
         
-        # Grafana 10.x ke liye 'plugins' structure mandatory hai
+        # 10.x ke liye compliant configuration
         config = {
             "plugins": {
                 "pluginAdminEnabled": True,
@@ -33,7 +29,6 @@ def lambda_handler(event, context):
             }
         }
         
-        # update_workspace_configuration ko stringified JSON chahiye
         client.update_workspace_configuration(
             workspaceId=workspace_id, 
             configuration=json.dumps(config)
@@ -41,5 +36,4 @@ def lambda_handler(event, context):
         
         cfn_send(event, context, 'SUCCESS', {"Status": "Finished"})
     except Exception as e:
-        # Error details ko reason mein dal rahe hain taaki debugging aasaan ho
         cfn_send(event, context, 'FAILED', {"Error": str(e)}, reason=str(e))
