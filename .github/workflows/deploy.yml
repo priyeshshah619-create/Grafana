@@ -18,9 +18,12 @@ jobs:
       
       - name: Configure Grafana
         env:
-          GRAFANA_URL: "https://g-d190288ff4.grafana-workspace.us-east-1.amazonaws.com"
           GRAFANA_TOKEN: ${{ secrets.GRAFANA_API_TOKEN }}
         run: |
+          # Dynamic URL Fetch
+          GRAFANA_URL=$(aws cloudformation describe-stacks --stack-name observability-stack --query "Stacks[0].Outputs[?OutputKey=='GrafanaEndpoint'].OutputValue" --output text)
+          echo "Using Grafana URL: $GRAFANA_URL"
+          
           # 1. Push Dashboard
           DASHBOARD_JSON=$(cat dashboards/business-metrics.json)
           jq -n --argjson dash "$DASHBOARD_JSON" '{dashboard: $dash, overwrite: true}' > payload.json
