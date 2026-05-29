@@ -1,0 +1,21 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+processors:
+  batch:
+
+exporters:
+  awsemf:
+    namespace: 'BusinessMetrics/Application'
+    log_group_name: '/aws/lambda/observability-stack'
+    log_stream_name: 'otel-metrics'
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [awsemf]
