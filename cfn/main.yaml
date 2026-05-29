@@ -82,10 +82,10 @@ Resources:
                   print(f"CRITICAL ERROR: {str(e)}")
                   cfnresponse.send(event, context, cfnresponse.FAILED, {"Reason": str(e)})
 
-  # 5. Custom Resource to Trigger Installation
-  InstallPlugins:
-    Type: Custom::GrafanaPlugin
-    Properties:
-      ServiceToken: !GetAtt PluginInstallerFunction.Arn
-      WorkspaceId: !Ref GrafanaWorkspace
-      Version: "1.5"
+# 5. Custom Resource to Trigger Installation (Commented out for now)
+# InstallPlugins:
+#   Type: Custom::GrafanaPlugin
+#   Properties:
+#     ServiceToken: !GetAtt PluginInstallerFunction.Arn
+#     WorkspaceId: !Ref GrafanaWorkspace
+#     Version: "1.5"
