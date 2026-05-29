@@ -30,5 +30,5 @@ jobs:
           GRAFANA_URL: "https://g-d190288ff4.grafana-workspace.us-east-1.amazonaws.com"
           GRAFANA_TOKEN: ${{ secrets.GRAFANA_API_TOKEN }}
         run: |
-          PAYLOAD='{"plugins": {"pluginAdminEnabled": true, "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]}, "unifiedAlerting": {"enabled": true}}'
-          curl -s -X POST "$GRAFANA_URL/api/admin/provisioning/plugins" -H "Authorization: Bearer $GRAFANA_TOKEN" -H "Content-Type: application/json" -d "$PAYLOAD"
+          curl -s -X POST "$GRAFANA_URL/api/plugins/grafana-piechart-panel/settings" -H "Authorization: Bearer $GRAFANA_TOKEN" -H "Content-Type: application/json" -d '{"enabled": true}'
+          curl -s -X POST "$GRAFANA_URL/api/plugins/grafana-clock-panel/settings" -H "Authorization: Bearer $GRAFANA_TOKEN" -H "Content-Type: application/json" -d '{"enabled": true}'
