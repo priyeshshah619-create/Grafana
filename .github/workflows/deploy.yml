@@ -21,6 +21,9 @@ jobs:
             --stack-name observability-stack \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 
+      - name: Wait for Grafana to be ready
+        run: sleep 90
+
       - name: Configure Grafana Dashboards
         env:
           GRAFANA_URL: "https://g-1f0dc35846.grafana-workspace.us-east-1.amazonaws.com"
@@ -38,13 +41,7 @@ jobs:
           GRAFANA_URL: "https://g-1f0dc35846.grafana-workspace.us-east-1.amazonaws.com"
           GRAFANA_TOKEN: ${{ secrets.GRAFANA_API_TOKEN }}
         run: |
-          PAYLOAD='{
-              "plugins": {
-                  "pluginAdminEnabled": true,
-                  "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]
-              },
-              "unifiedAlerting": {"enabled": true}
-          }'
+          PAYLOAD='{"plugins": {"pluginAdminEnabled": true, "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]}, "unifiedAlerting": {"enabled": true}}'
           curl -s -X POST "$GRAFANA_URL/api/admin/provisioning/plugins" \
             -H "Authorization: Bearer $GRAFANA_TOKEN" \
             -H "Content-Type: application/json" \
