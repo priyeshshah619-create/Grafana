@@ -1,4 +1,6 @@
-import boto3, json, urllib3
+import boto3
+import json
+import urllib3
 
 http = urllib3.PoolManager()
 
@@ -17,32 +19,28 @@ def cfn_send(event, context, status, data, reason=None):
     http.request('PUT', event['ResponseURL'], body=json_body, headers=headers)
 
 def lambda_handler(event, context):
-    try:
-        if event['RequestType'] == 'Delete':
-            cfn_send(event, context, 'SUCCESS', {})
-            return
+    if event['RequestType'] == 'Delete':
+        cfn_send(event, context, 'SUCCESS', {})
+        return
         
+    try:
         client = boto3.client('grafana')
         workspace_id = event['ResourceProperties']['WorkspaceId']
         
-        # 10.4 Schema
-        config = {
+        # 10.4 Schema (Strict)
+        payload = {
             "plugins": {
                 "pluginAdminEnabled": True,
                 "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]
             }
         }
         
-        config_json = json.dumps(config)
-        print(f"DEBUG: Payload: {config_json}") # Logs mein dikhega
-        
+        # API Call
         client.update_workspace_configuration(
             workspaceId=workspace_id,
-            configuration=config_json
+            configuration=json.dumps(payload)
         )
-        
         cfn_send(event, context, 'SUCCESS', {"Status": "Finished"})
     except Exception as e:
-        error_str = str(e)
-        print(f"ERROR: {error_str}") # Logs mein dikhega
-        cfn_send(event, context, 'FAILED', {"Error": error_str}, reason=error_str)
+        # Rollback se pehle reason return karo
+        cfn_send(event, context, 'FAILED', {"Error": str(e)}, reason=str(e))
