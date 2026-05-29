@@ -26,7 +26,7 @@ jobs:
 
       - name: Configure Grafana Dashboards
         env:
-          GRAFANA_URL: "https://g-1f0dc35846.grafana-workspace.us-east-1.amazonaws.com"
+          GRAFANA_URL: "https://g-d190288ff4.grafana-workspace.us-east-1.amazonaws.com"
           GRAFANA_TOKEN: ${{ secrets.GRAFANA_API_TOKEN }}
         run: |
           DASHBOARD_JSON=$(cat dashboards/business-metrics.json)
