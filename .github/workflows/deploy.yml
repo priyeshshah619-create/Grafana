@@ -1,5 +1,6 @@
 name: Deploy Observability
 on: [push]
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -31,4 +32,20 @@ jobs:
             -H "Authorization: Bearer $GRAFANA_TOKEN" \
             -H "Content-Type: application/json" \
             -d @payload.json
- 
+
+      - name: Configure Grafana Plugins
+        env:
+          GRAFANA_URL: "https://g-1f0dc35846.grafana-workspace.us-east-1.amazonaws.com"
+          GRAFANA_TOKEN: ${{ secrets.GRAFANA_API_TOKEN }}
+        run: |
+          PAYLOAD='{
+              "plugins": {
+                  "pluginAdminEnabled": true,
+                  "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]
+              },
+              "unifiedAlerting": {"enabled": true}
+          }'
+          curl -s -X POST "$GRAFANA_URL/api/admin/provisioning/plugins" \
+            -H "Authorization: Bearer $GRAFANA_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
