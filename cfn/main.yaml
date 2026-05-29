@@ -8,7 +8,6 @@ Type: AWS::IAM::Role
 Properties:
 RoleName: GrafanaWorkspaceRole
 
-```
   AssumeRolePolicyDocument:
     Version: '2012-10-17'
     Statement:
@@ -22,14 +21,12 @@ RoleName: GrafanaWorkspaceRole
   ManagedPolicyArns:
     - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
     - arn:aws:iam::aws:policy/AmazonPrometheusQueryAccess
-```
 
 GrafanaWorkspace:
 Type: AWS::Grafana::Workspace
 Properties:
 Name: enterprise-observability
 
-```
   AccountAccessType: CURRENT_ACCOUNT
 
   AuthenticationProviders:
@@ -45,7 +42,6 @@ Name: enterprise-observability
 
   NotificationDestinations:
     - SNS
-```
 
 Outputs:
 
