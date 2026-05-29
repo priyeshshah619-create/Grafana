@@ -1,7 +1,13 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Observability Stack with Plugin Automation'
+Description: 'Observability Stack with SNS Notifications and Plugin Automation'
 
 Resources:
+  # SNS Topic for Grafana Alerts
+  AlertSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: Grafana-Alert-Topic
+
   GrafanaWorkspaceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -18,7 +24,12 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action: ['grafana:UpdateWorkspaceConfiguration', 'logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents']
+                Action: 
+                  - 'grafana:UpdateWorkspaceConfiguration'
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'sns:Publish'
                 Resource: '*'
 
   GrafanaWorkspace:
@@ -48,6 +59,7 @@ Resources:
               try:
                   if event['RequestType'] == 'Delete': cfn_send(event, context, 'SUCCESS', {}); return
                   client = boto3.client('grafana')
+                  # Plugin configuration for Business Driven Monitoring
                   config = {"plugins": {"pluginAdminEnabled": True, "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]}}
                   client.update_workspace_configuration(workspaceId=event['ResourceProperties']['WorkspaceId'], configuration=json.dumps(config))
                   cfn_send(event, context, 'SUCCESS', {"Status": "Finished"})
@@ -56,6 +68,7 @@ Resources:
 
   EnablePluginsCustomResource:
     Type: AWS::CloudFormation::CustomResource
+    DependsOn: GrafanaWorkspace
     Properties:
       ServiceToken: !GetAtt PluginUpdaterFunction.Arn
       WorkspaceId: !Ref GrafanaWorkspace
@@ -63,3 +76,5 @@ Resources:
 Outputs:
   GrafanaWorkspaceId:
     Value: !Ref GrafanaWorkspace
+  SNSTopicArn:
+    Value: !Ref AlertSNSTopic
