@@ -1,91 +1,56 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Full Observability Stack'
+Description: AWS Managed Grafana Base Stack
 
 Resources:
-  # 1. IAM Role for the Grafana Workspace
-  GrafanaWorkspaceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: {Service: [grafana.amazonaws.com]}
-            Action: ['sts:AssumeRole']
-      # MANAGED POLICY REMOVED: It was causing the 404/NotFound error
 
-  # 2. IAM Role for the Lambda
-  LambdaRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: {Service: [lambda.amazonaws.com]}
-            Action: ['sts:AssumeRole']
-      Policies:
-        - PolicyName: GrafanaPluginPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: 
-                  - grafana:UpdateWorkspaceConfiguration
-                  - grafana:DescribeWorkspaceConfiguration
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: "*"
+GrafanaWorkspaceRole:
+Type: AWS::IAM::Role
+Properties:
+RoleName: GrafanaWorkspaceRole
 
-  # 3. Managed Grafana Workspace
-  GrafanaWorkspace:
-    Type: AWS::Grafana::Workspace
-    Properties:
-      AccountAccessType: CURRENT_ACCOUNT
-      AuthenticationProviders: [AWS_SSO]
-      PermissionType: SERVICE_MANAGED
-      Name: ObservabilityStack
-      RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
+```
+  AssumeRolePolicyDocument:
+    Version: '2012-10-17'
+    Statement:
+      - Effect: Allow
+        Principal:
+          Service:
+            - grafana.amazonaws.com
+        Action:
+          - sts:AssumeRole
 
-  # 4. Plugin Installer Lambda
-  PluginInstallerFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      Handler: index.lambda_handler
-      Runtime: python3.9
-      Role: !GetAtt LambdaRole.Arn
-      Timeout: 60
-      Code:
-        ZipFile: |
-          import boto3, cfnresponse, json
-          client = boto3.client('grafana')
-          def lambda_handler(event, context):
-              if event['RequestType'] == 'Delete':
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-                  return
-              try:
-                  workspace_id = event['ResourceProperties']['WorkspaceId']
-                  config_payload = {
-                      "plugins": {
-                          "pluginAdminEnabled": True,
-                          "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]
-                      },
-                      "unifiedAlerting": { "enabled": True }
-                  }
-                  client.update_workspace_configuration(
-                      workspaceId=workspace_id,
-                      configuration=json.dumps(config_payload)
-                  )
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-              except Exception as e:
-                  print(f"CRITICAL ERROR: {str(e)}")
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {"Reason": str(e)})
+  ManagedPolicyArns:
+    - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
+    - arn:aws:iam::aws:policy/AmazonPrometheusQueryAccess
+```
 
-# 5. Custom Resource to Trigger Installation (Commented out for now)
-# InstallPlugins:
-#   Type: Custom::GrafanaPlugin
-#   Properties:
-#     ServiceToken: !GetAtt PluginInstallerFunction.Arn
-#     WorkspaceId: !Ref GrafanaWorkspace
-#     Version: "1.5"
+GrafanaWorkspace:
+Type: AWS::Grafana::Workspace
+Properties:
+Name: enterprise-observability
+
+```
+  AccountAccessType: CURRENT_ACCOUNT
+
+  AuthenticationProviders:
+    - AWS_SSO
+
+  PermissionType: SERVICE_MANAGED
+
+  RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
+
+  DataSources:
+    - CLOUDWATCH
+    - PROMETHEUS
+
+  NotificationDestinations:
+    - SNS
+```
+
+Outputs:
+
+GrafanaWorkspaceId:
+Value: !Ref GrafanaWorkspace
+
+GrafanaWorkspaceEndpoint:
+Value: !GetAtt GrafanaWorkspace.Endpoint
