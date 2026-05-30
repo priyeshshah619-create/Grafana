@@ -95,13 +95,26 @@ jobs:
       - name: Export stack outputs
         id: export
         run: |
+          set -euo pipefail
+
           aws cloudformation describe-stacks \
             --stack-name "${STACK_NAME}" \
             --query "Stacks[0].Outputs" \
             --output json > outputs.json
+
+          echo "RAW OUTPUTS:"
+          cat outputs.json
+            
           echo "GrafanaEndpoint=$(jq -r '.[] | select(.OutputKey=="GrafanaEndpoint") | .OutputValue' outputs.json)" >> $GITHUB_OUTPUT
           echo "GrafanaWorkspaceId=$(jq -r '.[] | select(.OutputKey=="GrafanaWorkspaceId") | .OutputValue' outputs.json)" >> $GITHUB_OUTPUT
-          echo "AlertTopicArn=$(jq -r '.[] | select(.OutputKey=="AlertTopicArn") | .OutputValue' outputs.json)" >> $GITHUB_OUTPUT  
+          echo "AlertTopicArn=$(jq -r '.[] | select(.OutputKey=="AlertTopicArn") | .OutputValue' outputs.json)" >> $GITHUB_OUTPUT
+
+          echo "GrafanaEndpoint=$GRAFANA_ENDPOINT" >> $GITHUB_OUTPUT
+          echo "GrafanaWorkspaceId=$WORKSPACE_ID" >> $GITHUB_OUTPUT
+          echo "AlertTopicArn=$SNS_ARN" >> $GITHUB_OUTPUT
+
+          echo "DEBUG GrafanaEndpoint=$GRAFANA_ENDPOINT"
+          echo "DEBUG SNS_ARN=$SNS_ARN"
 
   deploy-dashboards-alerts:
     name: Deploy dashboard and alert code
@@ -131,6 +144,11 @@ jobs:
             --output text)
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Debug outputs from previous job
+        run: |
+          echo "GRAFANA_URL=${{ needs.deploy-infrastructure.outputs.grafana-endpoint }}"
+          echo "SNS_TOPIC_ARN=${{ needs.deploy-infrastructure.outputs.sns-topic-arn }}"
 
       - name: Deploy Grafana dashboards and alerts
         env:
