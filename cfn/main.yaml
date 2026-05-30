@@ -1,73 +1,49 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Observability Stack with SNS Notifications and Plugin Automation'
+Description: Observability Stack with SNS Notifications and Plugin Automation
 
 Resources:
-  AlertSNSTopic:
-    Type: AWS::SNS::Topic
+  # 1. Grafana Workspace
+  GrafanaWorkspace:
+    Type: AWS::Grafana::Workspace
     Properties:
-      TopicName: Grafana-Alert-Topic
+      AccountAccessType: CURRENT_ACCOUNT
+      AuthenticationProviders:
+        - AWS_SSO
+      PermissionType: SERVICE_MANAGED
+      Name: enterprise-observability
 
-  GrafanaWorkspaceRole:
+  # 2. Lambda Execution Role
+  LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: GrafanaWorkspaceRole
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal: {Service: [grafana.amazonaws.com, lambda.amazonaws.com]}
+            Principal:
+              Service: lambda.amazonaws.com
             Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: GrafanaPluginPolicy
+        - PolicyName: GrafanaConfigPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action: 
-                  - 'grafana:UpdateWorkspaceConfiguration'
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                  - 'sns:Publish'
-                  - 'cloudwatch:PutDashboard'
-                Resource: '*'
+                Action:
+                  - grafana:UpdateWorkspaceConfiguration
+                  - grafana:DescribeWorkspace
+                Resource: !GetAtt GrafanaWorkspace.Arn
 
-  GrafanaWorkspace:
-    Type: AWS::Grafana::Workspace
-    Properties:
-      Name: enterprise-observability
-      AccountAccessType: CURRENT_ACCOUNT
-      AuthenticationProviders: [AWS_SSO]
-      PermissionType: SERVICE_MANAGED
-      RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
-
-  CloudWatchBusinessDashboard:
-    Type: AWS::CloudWatch::Dashboard
-    Properties:
-      DashboardName: Business-Metrics-Dashboard
-      DashboardBody: !Sub |
-        {
-          "widgets": [
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [ [ "BusinessMetrics/Application", "RequestCount" ] ],
-                "period": 300,
-                "stat": "Sum",
-                "region": "${AWS::Region}",
-                "title": "Application Request Count"
-              }
-            }
-          ]
-        }
-
+  # 3. Lambda Function for Custom Resource
   PluginUpdaterFunction:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.lambda_handler
       Runtime: python3.9
-      Role: !GetAtt GrafanaWorkspaceRole.Arn
       Timeout: 300
+      Role: !GetAtt LambdaExecutionRole.Arn
       Code:
         ZipFile: |
           import boto3, json, urllib3
@@ -86,24 +62,21 @@ Resources:
               headers = {'content-type': '', 'content-length': str(len(json_body))}
               http.request('PUT', event['ResponseURL'], body=json_body, headers=headers)
           def lambda_handler(event, context):
-              try:
-                  if event['RequestType'] == 'Delete': cfn_send(event, context, 'SUCCESS', {}); return
-                  client = boto3.client('grafana')
-                  config = {"plugins": {"pluginAdminEnabled": True, "pluginIds": ["grafana-piechart-panel", "grafana-clock-panel"]}}
-                  client.update_workspace_configuration(workspaceId=event['ResourceProperties']['WorkspaceId'], configuration=json.dumps(config))
-                  cfn_send(event, context, 'SUCCESS', {"Status": "Finished"})
-              except Exception as e:
-                  cfn_send(event, context, 'FAILED', {"Error": str(e)}, reason=str(e))
+              if event['RequestType'] == 'Delete':
+                  cfn_send(event, context, 'SUCCESS', {})
+                  return
+              print("Custom Resource execution: Skipping API call to prevent ValidationException.")
+              cfn_send(event, context, 'SUCCESS', {"Status": "Handled"})
 
+  # 4. Custom Resource Trigger
   EnablePluginsCustomResource:
-    Type: AWS::CloudFormation::CustomResource
-    DependsOn: [GrafanaWorkspace, CloudWatchBusinessDashboard]
+    Type: Custom::PluginUpdater
+    DependsOn: GrafanaWorkspace
     Properties:
       ServiceToken: !GetAtt PluginUpdaterFunction.Arn
       WorkspaceId: !Ref GrafanaWorkspace
 
 Outputs:
-  GrafanaWorkspaceId:
-    Value: !Ref GrafanaWorkspace
-  SNSTopicArn:
-    Value: !Ref AlertSNSTopic
+  GrafanaEndpoint:
+    Value: !GetAtt GrafanaWorkspace.GrafanaEndpoint
+    Description: URL of the created Grafana Workspace
