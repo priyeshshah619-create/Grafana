@@ -44,9 +44,9 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     outputs:
-         grafana-endpoint: ${{ steps.export.outputs.grafana_endpoint }}
-         workspace-id: ${{ steps.export.outputs.workspace_id }}
-         sns-topic-arn: ${{ steps.export.outputs.alert_topic_arn }}
+      grafana_endpoint: ${{ steps.export.outputs.grafana_endpoint }}
+      workspace_id: ${{ steps.export.outputs.workspace_id }}
+      alert_topic_arn: ${{ steps.export.outputs.alert_topic_arn }}
     steps:
       - uses: actions/checkout@v4
 
@@ -129,6 +129,11 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Validate required outputs
+        run: |
+          test -n "${{ needs.deploy-infrastructure.outputs.grafana-endpoint }}" || (echo "Missing GRAFANA_ENDPOINT" && exit 1)
+          test -n "${{ needs.deploy-infrastructure.outputs.sns-topic-arn }}" || (echo "Missing SNS_TOPIC_ARN" && exit 1)
+
       - name: Deploy CloudWatch dashboard
         run: |
           aws cloudwatch put-dashboard \
@@ -161,3 +166,9 @@ jobs:
           GRAFANA_TOKEN: ${{ steps.grafana.outputs.token }}
           SNS_TOPIC_ARN: ${{ needs.deploy-infrastructure.outputs.sns-topic-arn }}
         run: bash ./scripts/deploy-grafana-assets.sh
+
+
+
+
+
+
