@@ -147,8 +147,8 @@ jobs:
 
       - name: DEBUG - check outputs from previous job
         run: |
-          echo "GRAFANA_ENDPOINT = '${{ needs.deploy-infrastructure.outputs.grafana-endpoint }}'"
-          echo "SNS_TOPIC_ARN = '${{ needs.deploy-infrastructure.outputs.sns-topic-arn }}'"
+          echo "GRAFANA_ENDPOINT = '${{ needs.deploy-infrastructure.outputs.grafana_endpoint }}'"
+          echo "SNS_TOPIC_ARN = '${{ needs.deploy-infrastructure.outputs.alert_topic_arn }}'"
 
       - name: Resolve Grafana service account token
         id: grafana
@@ -162,8 +162,8 @@ jobs:
 
       - name: Debug outputs from previous job
         run: |
-          echo "GRAFANA_URL=${{ needs.deploy-infrastructure.outputs.grafana-endpoint }}"
-          echo "SNS_TOPIC_ARN=${{ needs.deploy-infrastructure.outputs.sns-topic-arn }}"
+          echo "GRAFANA_URL=${{ needs.deploy-infrastructure.outputs.grafana_endpoint }}"
+          echo "SNS_TOPIC_ARN=${{ needs.deploy-infrastructure.outputs.alert_topic_arn }}"
 
       - name: Deploy Grafana dashboards and alerts
         env:
