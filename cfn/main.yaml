@@ -1,44 +1,33 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Resources:
+  # Grafana Workspace in Service Managed mode (No WorkspaceRoleArn needed)
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
       AccountAccessType: CURRENT_ACCOUNT
       AuthenticationProviders:
         - AWS_SSO
-      PermissionType: CUSTOM
-      WorkspaceRoleArn: !GetAtt GrafanaWorkspaceRole.Arn
+      PermissionType: SERVICE_MANAGED
       Name: !Sub "observability-${AWS::AccountId}"
 
-  GrafanaWorkspaceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: {Service: grafana.amazonaws.com}
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: GrafanaPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: [cloudwatch:ListMetrics, cloudwatch:GetMetricData]
-                Resource: "*"
-
+  # Custom Resource Lambda
   PluginUpdaterFunction:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.lambda_handler
       Runtime: python3.9
-      Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 300
+      Role: !GetAtt LambdaExecutionRole.Arn
       Code:
         ZipFile: |
+          import json, urllib3
+          http = urllib3.PoolManager()
+          def cfn_send(event, context, status, data):
+              body = json.dumps({'Status': status, 'Reason': 'Success', 'StackId': event['StackId'], 'RequestId': event['RequestId'], 'LogicalResourceId': event['LogicalResourceId'], 'PhysicalResourceId': 'GrafanaPluginConfig'})
+              http.request('PUT', event['ResponseURL'], body=body)
           def lambda_handler(event, context):
-              return {'Status': 'SUCCESS'}
+              cfn_send(event, context, 'SUCCESS', {})
+              return
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
