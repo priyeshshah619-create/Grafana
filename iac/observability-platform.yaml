@@ -90,11 +90,6 @@ Resources:
         - SNS
       GrafanaVersion: "10.4"
       Description: !Sub Managed Grafana observability workspace for ${Environment}
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Service
-          Value: observability
 
   GrafanaTokenSecret:
     Type: AWS::SecretsManager::Secret
