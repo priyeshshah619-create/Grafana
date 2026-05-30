@@ -15,7 +15,7 @@ grafana = boto3.client("grafana", config=AWS_CLIENT_CONFIG)
 secrets = boto3.client("secretsmanager", config=AWS_CLIENT_CONFIG)
 
 MIN_RESPONSE_TIME_MS = 15000
-WORKSPACE_WAIT_SECONDS = 120
+WORKSPACE_WAIT_SECONDS = 600
 PLUGIN_INSTALL_SECONDS = 75
 HTTP_TIMEOUT_SECONDS = 10
 
@@ -45,6 +45,10 @@ def handler(event, context):
         wait_for_workspace(workspace_id, context)
         ensure_time(context, "before enabling Grafana workspace features")
         enable_workspace_features(workspace_id)
+        
+        ensure_time(context, "waiting for Grafana workspace after configuration update")
+        wait_for_workspace(workspace_id, context)
+        
         ensure_time(context, "before creating Grafana service account token")
         token = create_or_rotate_service_account_token(
             workspace_id=workspace_id,
