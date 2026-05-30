@@ -12,9 +12,10 @@ on:
       - main
     paths:
       - iac/**
-      - src/**
+      - lambda/**
       - dashboards/**
       - alerts/**
+      - otel/**
       - scripts/**
       - .github/workflows/deploy.yml
 
@@ -27,7 +28,6 @@ env:
   STACK_NAME: ${{ vars.STACK_NAME || 'managed-grafana-observability' }}
   ENVIRONMENT: ${{ inputs.environment || vars.ENVIRONMENT || 'prod' }}
   GRAFANA_PLUGINS: ${{ vars.GRAFANA_PLUGINS || 'grafana-clock-panel,yesoreyeram-infinity-datasource,volkovlabs-echarts-panel' }}
-  ARTIFACT_BUCKET: ${{ vars.STACK_NAME || 'managed-grafana-observability' }}-${{ secrets.AWS_REGION }}-artifacts
 
 jobs:
   validate:
@@ -58,6 +58,12 @@ jobs:
 
       - name: Package custom-resource lambdas
         run: bash ./scripts/package-lambdas.sh
+
+      - name: Resolve account-scoped artifact bucket
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ARTIFACT_BUCKET="${STACK_NAME}-${ACCOUNT_ID}-${AWS_REGION}-artifacts"
+          echo "ARTIFACT_BUCKET=${ARTIFACT_BUCKET}" >> "$GITHUB_ENV"
 
       - name: Ensure artifact bucket
         run: |
