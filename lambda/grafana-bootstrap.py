@@ -58,10 +58,26 @@ def handler(event, context):
         secrets.put_secret_value(SecretId=token_secret_arn, SecretString=token)
 
         installed = []
+        attempted = []
+
         for plugin_id in plugin_ids:
-            ensure_time(context, f"before installing plugin {plugin_id}")
-            install_plugin(workspace_endpoint, token, plugin_id, context)
-            installed.append(plugin_id)
+            attempted.append(plugin_id)
+
+            try:
+                ensure_time(context, f"before installing plugin {plugin_id}")
+                install_plugin(workspace_endpoint, token, plugin_id, context)
+                installed.append(plugin_id)
+
+            except Exception as exc:
+                print(
+                    json.dumps(
+                        {
+                            "message": "plugin installation attempted but not supported by workspace",
+                            "pluginId": plugin_id,
+                            "detail": str(exc),
+                        }
+                    )
+                )
 
         send_response(
             event,
@@ -71,6 +87,7 @@ def handler(event, context):
                 "WorkspaceId": workspace_id,
                 "Endpoint": workspace_endpoint,
                 "InstalledPlugins": ",".join(installed),
+                "AttemptedPlugins": ",".join(attempted),
             },
             physical_id,
         )
