@@ -1,0 +1,253 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Single-account AWS Managed Grafana observability platform with CloudWatch and Lambda custom resources.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedPattern: "^[a-z][a-z0-9-]{1,20}$"
+  ArtifactBucket:
+    Type: String
+    Description: S3 bucket containing Lambda deployment zip files.
+  GrafanaPluginIds:
+    Type: CommaDelimitedList
+    Default: grafana-clock-panel,yesoreyeram-infinity-datasource,volkovlabs-echarts-panel
+    Description: Comma-separated plugin IDs from the Amazon Managed Grafana plugin catalog only.
+  AllowedGrafanaPluginIds:
+    Type: CommaDelimitedList
+    Default: grafana-clock-panel,yesoreyeram-infinity-datasource,volkovlabs-echarts-panel
+    Description: Guardrail allowlist. Amazon Managed Grafana does not support arbitrary custom plugin installation.
+  SsoUserIds:
+    Type: CommaDelimitedList
+    Default: ""
+    Description: IAM Identity Center user IDs to assign as Grafana Admin.
+  SsoGroupIds:
+    Type: CommaDelimitedList
+    Default: ""
+    Description: IAM Identity Center group IDs to assign as Grafana Editor.
+  NotificationEmail:
+    Type: String
+    Default: ""
+    Description: Optional email endpoint subscribed to the alert SNS topic.
+
+Conditions:
+  HasNotificationEmail: !Not [!Equals [!Ref NotificationEmail, ""]]
+
+Resources:
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub ${Environment}-grafana-alerts
+      KmsMasterKeyId: alias/aws/sns
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Service
+          Value: observability
+
+  AlertTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasNotificationEmail
+    Properties:
+      TopicArn: !Ref AlertTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+
+  GrafanaWorkspaceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Environment}-managed-grafana-workspace-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: grafana.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonGrafanaCloudWatchAccess
+      Policies:
+        - PolicyName: sns-alert-publish
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref AlertTopic
+
+  GrafanaWorkspace:
+    Type: AWS::Grafana::Workspace
+    Properties:
+      Name: !Sub ${Environment}-managed-observability
+      AccountAccessType: CURRENT_ACCOUNT
+      AuthenticationProviders:
+        - AWS_SSO
+      PermissionType: CUSTOMER_MANAGED
+      RoleArn: !GetAtt GrafanaWorkspaceRole.Arn
+      DataSources:
+        - CLOUDWATCH
+      NotificationDestinations:
+        - SNS
+      GrafanaVersion: "10.4"
+      Description: !Sub Managed Grafana observability workspace for ${Environment}
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Service
+          Value: observability
+
+  GrafanaTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${AWS::StackName}/grafana/service-account-token
+      Description: Managed Grafana service account token created by the bootstrap custom resource.
+      KmsKeyId: alias/aws/secretsmanager
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/observability/${Environment}/application
+      RetentionInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  CustomResourceLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Environment}-grafana-custom-resource-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: grafana-bootstrap
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - grafana:CreateWorkspaceServiceAccount
+                  - grafana:CreateWorkspaceServiceAccountToken
+                  - grafana:DeleteWorkspaceServiceAccount
+                  - grafana:DeleteWorkspaceServiceAccountToken
+                  - grafana:DescribeWorkspace
+                  - grafana:ListWorkspaceServiceAccounts
+                  - grafana:ListWorkspaceServiceAccountTokens
+                  - grafana:UpdatePermissions
+                  - grafana:UpdateWorkspaceConfiguration
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - secretsmanager:PutSecretValue
+                  - secretsmanager:UpdateSecret
+                Resource: !Ref GrafanaTokenSecret
+
+  GrafanaBootstrapFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-grafana-bootstrap-custom-resource
+      Runtime: python3.12
+      Handler: handler.handler
+      Role: !GetAtt CustomResourceLambdaRole.Arn
+      Timeout: 240
+      MemorySize: 256
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: lambdas/grafana-bootstrap.zip
+      Environment:
+        Variables:
+          TOKEN_SECRET_ARN: !Ref GrafanaTokenSecret
+
+  SsoAssignmentFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-grafana-sso-assignment-custom-resource
+      Runtime: python3.12
+      Handler: handler.handler
+      Role: !GetAtt CustomResourceLambdaRole.Arn
+      Timeout: 120
+      MemorySize: 256
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: lambdas/sso-assignment.zip
+
+  GrafanaBootstrap:
+    Type: Custom::GrafanaBootstrap
+    DependsOn:
+      - GrafanaWorkspace
+      - GrafanaTokenSecret
+    Properties:
+      ServiceToken: !GetAtt GrafanaBootstrapFunction.Arn
+      ServiceTimeout: 300
+      WorkspaceId: !Ref GrafanaWorkspace
+      WorkspaceEndpoint: !GetAtt GrafanaWorkspace.Endpoint
+      PluginIds: !Ref GrafanaPluginIds
+      AllowedPluginIds: !Ref AllowedGrafanaPluginIds
+      TokenSecretArn: !Ref GrafanaTokenSecret
+      ServiceAccountName: automation-deployer
+      ServiceAccountRole: ADMIN
+
+  SsoAssignment:
+    Type: Custom::GrafanaSsoAssignment
+    DependsOn: GrafanaWorkspace
+    Properties:
+      ServiceToken: !GetAtt SsoAssignmentFunction.Arn
+      ServiceTimeout: 180
+      WorkspaceId: !Ref GrafanaWorkspace
+      AdminUserIds: !Ref SsoUserIds
+      EditorGroupIds: !Ref SsoGroupIds
+
+  HighCheckoutErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${Environment}-business-checkout-error-rate-high
+      AlarmDescription: Business checkout error rate is above threshold.
+      Namespace: Business/App
+      MetricName: CheckoutErrorRate
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      DatapointsToAlarm: 3
+      Threshold: 2
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertTopic
+
+  LowOrderConversionAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${Environment}-business-order-conversion-low
+      AlarmDescription: Order conversion rate is below the production target.
+      Namespace: Business/App
+      MetricName: OrderConversionRate
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      Threshold: 95
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: missing
+      AlarmActions:
+        - !Ref AlertTopic
+
+Outputs:
+  GrafanaWorkspaceId:
+    Value: !Ref GrafanaWorkspace
+  GrafanaEndpoint:
+    Value: !Sub https://${GrafanaWorkspace.Endpoint}
+  AlertTopicArn:
+    Value: !Ref AlertTopic
+  GrafanaTokenSecretArn:
+    Value: !Ref GrafanaTokenSecret
+  ApplicationLogGroupName:
+    Value: !Ref ApplicationLogGroup

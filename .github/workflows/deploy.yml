@@ -1,0 +1,129 @@
+name: Deploy Observability Platform
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: prod
+  push:
+    branches:
+      - main
+    paths:
+      - iac/**
+      - src/**
+      - dashboards/**
+      - alerts/**
+      - scripts/**
+      - .github/workflows/deploy.yml
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  STACK_NAME: ${{ vars.STACK_NAME || 'managed-grafana-observability' }}
+  ENVIRONMENT: ${{ inputs.environment || vars.ENVIRONMENT || 'prod' }}
+  GRAFANA_PLUGINS: ${{ vars.GRAFANA_PLUGINS || 'grafana-clock-panel,yesoreyeram-infinity-datasource,volkovlabs-echarts-panel' }}
+  ARTIFACT_BUCKET: ${{ vars.STACK_NAME || 'managed-grafana-observability' }}-${{ secrets.AWS_REGION }}-artifacts
+
+jobs:
+  validate:
+    name: Validate IaC and dashboard code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate repository artifacts
+        shell: pwsh
+        run: ./scripts/validate.ps1
+
+  deploy-infrastructure:
+    name: Deploy CloudFormation
+    needs: validate
+    runs-on: ubuntu-latest
+    outputs:
+      grafana-endpoint: ${{ steps.outputs.outputs.GrafanaEndpoint }}
+      workspace-id: ${{ steps.outputs.outputs.GrafanaWorkspaceId }}
+      sns-topic-arn: ${{ steps.outputs.outputs.AlertTopicArn }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Package custom-resource lambdas
+        run: bash ./scripts/package-lambdas.sh
+
+      - name: Ensure artifact bucket
+        run: |
+          if [ "${AWS_REGION}" = "us-east-1" ]; then
+            aws s3api create-bucket --bucket "${ARTIFACT_BUCKET}" --region "${AWS_REGION}" || true
+          else
+            aws s3api create-bucket \
+              --bucket "${ARTIFACT_BUCKET}" \
+              --region "${AWS_REGION}" \
+              --create-bucket-configuration LocationConstraint="${AWS_REGION}" || true
+          fi
+          aws s3api put-bucket-encryption --bucket "${ARTIFACT_BUCKET}" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+          aws s3 sync dist/lambdas "s3://${ARTIFACT_BUCKET}/lambdas"
+
+      - name: Deploy stack
+        run: |
+          aws cloudformation deploy \
+            --stack-name "${STACK_NAME}" \
+            --template-file iac/observability-platform.yaml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              Environment="${ENVIRONMENT}" \
+              ArtifactBucket="${ARTIFACT_BUCKET}" \
+              GrafanaPluginIds="${GRAFANA_PLUGINS}" \
+              SsoUserIds="${{ vars.SSO_USER_IDS }}" \
+              SsoGroupIds="${{ vars.SSO_GROUP_IDS }}" \
+              NotificationEmail="${{ vars.NOTIFICATION_EMAIL || 'priyesh.shah619@gmail.com' }}"
+
+      - name: Export stack outputs
+        id: outputs
+        run: |
+          outputs=$(aws cloudformation describe-stacks --stack-name "${STACK_NAME}" --query "Stacks[0].Outputs" --output json)
+          echo "$outputs" | jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' >> "$GITHUB_OUTPUT"
+
+  deploy-dashboards-alerts:
+    name: Deploy dashboard and alert code
+    needs: deploy-infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy CloudWatch dashboard
+        run: |
+          aws cloudwatch put-dashboard \
+            --dashboard-name "${ENVIRONMENT}-business-observability" \
+            --dashboard-body file://dashboards/cloudwatch.json
+
+      - name: Resolve Grafana service account token
+        id: grafana
+        run: |
+          TOKEN=$(aws secretsmanager get-secret-value \
+            --secret-id "${STACK_NAME}/grafana/service-account-token" \
+            --query SecretString \
+            --output text)
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Grafana dashboards and alerts
+        env:
+          GRAFANA_URL: ${{ needs.deploy-infrastructure.outputs.grafana-endpoint }}
+          GRAFANA_TOKEN: ${{ steps.grafana.outputs.token }}
+          SNS_TOPIC_ARN: ${{ needs.deploy-infrastructure.outputs.sns-topic-arn }}
+        run: bash ./scripts/deploy-grafana-assets.sh

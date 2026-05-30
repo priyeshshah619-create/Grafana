@@ -1,0 +1,89 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  awscloudwatch:
+    region: ${env:AWS_REGION}
+    metrics:
+      named:
+        - namespace: AWS/ApplicationELB
+          metric_name: TargetResponseTime
+          period: 60s
+          statistics: [Average, p95]
+  azuremonitor:
+    subscription_id: ${env:AZURE_SUBSCRIPTION_ID}
+    tenant_id: ${env:AZURE_TENANT_ID}
+    client_id: ${env:AZURE_CLIENT_ID}
+    client_secret: ${env:AZURE_CLIENT_SECRET}
+    services:
+      - metric
+  googlecloud:
+    collection_interval: 60s
+    project: ${env:GCP_PROJECT_ID}
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+  batch:
+    timeout: 10s
+    send_batch_size: 8192
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: ${env:DEPLOYMENT_ENVIRONMENT}
+        action: upsert
+      - key: telemetry.platform
+        value: opentelemetry
+        action: upsert
+  attributes:
+    actions:
+      - key: customer.email
+        action: delete
+      - key: user.token
+        action: delete
+
+exporters:
+  awscloudwatchmetrics:
+    region: ${env:AWS_REGION}
+    namespace: Consolidated/Observability
+    dimension_rollup_option: NoDimensionRollup
+    metric_declarations:
+      - dimensions:
+          - [service.name, deployment.environment]
+          - [cloud.provider, service.name]
+        metric_name_selectors:
+          - ^http.server.duration$
+          - ^business.checkout.error_rate$
+          - ^business.order.conversion_rate$
+  awscloudwatchlogs:
+    region: ${env:AWS_REGION}
+    log_group_name: /aws/observability/${env:DEPLOYMENT_ENVIRONMENT}/application
+    log_stream_name: otel-collector
+  awsemf:
+    region: ${env:AWS_REGION}
+    namespace: Business/App
+    dimension_rollup_option: NoDimensionRollup
+    log_group_name: /aws/observability/${env:DEPLOYMENT_ENVIRONMENT}/application
+    metric_declarations:
+      - dimensions:
+          - [Service]
+          - [Service, Currency]
+        metric_name_selectors:
+          - CheckoutErrorRate
+          - OrderConversionRate
+          - RevenueAmount
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp, awscloudwatch, azuremonitor, googlecloud]
+      processors: [memory_limiter, resource, attributes, batch]
+      exporters: [awscloudwatchmetrics, awsemf]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, attributes, batch]
+      exporters: [awscloudwatchlogs]

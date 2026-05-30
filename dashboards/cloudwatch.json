@@ -1,0 +1,80 @@
+{
+  "start": "-PT6H",
+  "periodOverride": "auto",
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Checkout Error Rate",
+        "region": "us-east-1",
+        "view": "timeSeries",
+        "stat": "Average",
+        "period": 60,
+        "metrics": [
+          ["Business/App", "CheckoutErrorRate", "Service", "checkout", {"label": "Checkout error rate %"}]
+        ],
+        "annotations": {
+          "horizontal": [
+            {"label": "SLO threshold", "value": 2}
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Order Conversion Rate",
+        "region": "us-east-1",
+        "view": "timeSeries",
+        "stat": "Average",
+        "period": 300,
+        "metrics": [
+          ["Business/App", "OrderConversionRate", "Service", "checkout", {"label": "Conversion rate %"}]
+        ],
+        "annotations": {
+          "horizontal": [
+            {"label": "Business target", "value": 95}
+          ]
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Revenue per Minute",
+        "region": "us-east-1",
+        "view": "timeSeries",
+        "stat": "Sum",
+        "period": 60,
+        "metrics": [
+          ["Business/App", "RevenueAmount", "Service", "checkout", "Currency", "USD", {"label": "Revenue USD"}]
+        ]
+      }
+    },
+    {
+      "type": "log",
+      "x": 12,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Recent Application Errors",
+        "region": "us-east-1",
+        "query": "SOURCE '/aws/observability/prod/application' | fields @timestamp, level, service.name, trace_id, message | filter level in ['ERROR', 'FATAL'] | sort @timestamp desc | limit 50",
+        "view": "table"
+      }
+    }
+  ]
+}

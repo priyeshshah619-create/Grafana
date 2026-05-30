@@ -1,0 +1,13 @@
+{
+  "uid": "sns-business-alerts",
+  "name": "sns-business-alerts",
+  "type": "sns",
+  "settings": {
+    "topic": "SNS_TOPIC_ARN_PLACEHOLDER",
+    "authProvider": "default",
+    "subject": "[{{ .Status | toUpper }}] {{ .CommonLabels.business_service }} observability alert",
+    "message": "{{ template \"business-impact-template\" . }}",
+    "uploadImage": false
+  },
+  "disableResolveMessage": false
+}

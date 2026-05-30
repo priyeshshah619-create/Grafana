@@ -1,0 +1,18 @@
+{
+  "receiver": "sns-business-alerts",
+  "group_by": ["grafana_folder", "business_service", "severity"],
+  "group_wait": "30s",
+  "group_interval": "5m",
+  "repeat_interval": "4h",
+  "routes": [
+    {
+      "receiver": "sns-business-alerts",
+      "object_matchers": [
+        ["business_service", "=", "checkout"],
+        ["severity", "=", "page"]
+      ],
+      "group_by": ["business_service", "slo"],
+      "continue": false
+    }
+  ]
+}

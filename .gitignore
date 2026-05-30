@@ -1,0 +1,12 @@
+.aws-sam/
+.serverless/
+node_modules/
+dist/
+build/
+coverage/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.zip
+.env
+.env.*

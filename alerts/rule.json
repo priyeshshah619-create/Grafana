@@ -1,0 +1,70 @@
+{
+  "uid": "business-checkout-error-rate",
+  "title": "Checkout error rate above SLO",
+  "condition": "C",
+  "folderUID": "business-observability",
+  "ruleGroup": "business-slo",
+  "noDataState": "OK",
+  "execErrState": "Error",
+  "for": "5m",
+  "orgID": 1,
+  "annotations": {
+    "summary": "Checkout error rate is above 2% for 5 minutes.",
+    "runbook_url": "https://runbooks.example.com/checkout-error-rate"
+  },
+  "labels": {
+    "severity": "page",
+    "business_service": "checkout",
+    "slo": "checkout-error-rate"
+  },
+  "data": [
+    {
+      "refId": "A",
+      "relativeTimeRange": {"from": 600, "to": 0},
+      "datasourceUid": "cloudwatch",
+      "model": {
+        "refId": "A",
+        "datasource": {"type": "cloudwatch", "uid": "cloudwatch"},
+        "namespace": "Business/App",
+        "metricName": "CheckoutErrorRate",
+        "dimensions": {"Service": "checkout"},
+        "statistics": ["Average"],
+        "period": "60",
+        "region": "default",
+        "matchExact": true
+      }
+    },
+    {
+      "refId": "B",
+      "relativeTimeRange": {"from": 600, "to": 0},
+      "datasourceUid": "__expr__",
+      "model": {
+        "refId": "B",
+        "type": "reduce",
+        "expression": "A",
+        "reducer": "last",
+        "datasource": {"type": "__expr__", "uid": "__expr__"}
+      }
+    },
+    {
+      "refId": "C",
+      "relativeTimeRange": {"from": 600, "to": 0},
+      "datasourceUid": "__expr__",
+      "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "B",
+        "conditions": [
+          {
+            "type": "query",
+            "evaluator": {"params": [2], "type": "gt"},
+            "operator": {"type": "and"},
+            "query": {"params": ["C"]},
+            "reducer": {"type": "last", "params": []}
+          }
+        ],
+        "datasource": {"type": "__expr__", "uid": "__expr__"}
+      }
+    }
+  ]
+}

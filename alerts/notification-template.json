@@ -1,0 +1,4 @@
+{
+  "name": "business-impact-template",
+  "template": "{{ define \"business-impact-template\" }}{{ range .Alerts }}Business impact: {{ .Labels.business_service }} is {{ .Status }}. Summary: {{ .Annotations.summary }}. Runbook: {{ .Annotations.runbook_url }}{{ end }}{{ end }}"
+}
