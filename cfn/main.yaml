@@ -1,8 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Observability Stack with SNS Notifications and Plugin Automation
-
 Resources:
-  # 1. Grafana Workspace
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
@@ -13,30 +10,36 @@ Resources:
       WorkspaceRoleArn: !GetAtt GrafanaWorkspaceRole.Arn
       Name: !Sub "observability-${AWS::AccountId}"
 
-  # 2. Workspace Role (Required for CURRENT_ACCOUNT access)
   GrafanaWorkspaceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${AWS::StackName}-GrafanaWorkspaceRole"
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal:
-              Service: grafana.amazonaws.com
+            Principal: {Service: grafana.amazonaws.com}
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: GrafanaDataSourcePolicy
+        - PolicyName: GrafanaPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action:
-                  - cloudwatch:ListMetrics
-                  - cloudwatch:GetMetricData
+                Action: [cloudwatch:ListMetrics, cloudwatch:GetMetricData]
                 Resource: "*"
 
-  # 3. Lambda Execution Role
+  PluginUpdaterFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.9
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {'Status': 'SUCCESS'}
+
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -44,52 +47,7 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
+            Principal: {Service: lambda.amazonaws.com}
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
-  # 4. Lambda Function
-  PluginUpdaterFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      Handler: index.lambda_handler
-      Runtime: python3.9
-      Timeout: 300
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Code:
-        ZipFile: |
-          import boto3, json, urllib3
-          http = urllib3.PoolManager()
-          def cfn_send(event, context, status, data, reason=None):
-              response_body = {
-                  'Status': status,
-                  'Reason': reason or "Success",
-                  'PhysicalResourceId': event.get('PhysicalResourceId', 'GrafanaPluginConfig'),
-                  'StackId': event['StackId'],
-                  'RequestId': event['RequestId'],
-                  'LogicalResourceId': event['LogicalResourceId'],
-                  'Data': data
-              }
-              json_body = json.dumps(response_body)
-              headers = {'content-type': '', 'content-length': str(len(json_body))}
-              http.request('PUT', event['ResponseURL'], body=json_body, headers=headers)
-          def lambda_handler(event, context):
-              if event['RequestType'] == 'Delete':
-                  cfn_send(event, context, 'SUCCESS', {})
-                  return
-              print("Config skipped to avoid ValidationException")
-              cfn_send(event, context, 'SUCCESS', {"Status": "Handled"})
-
-  # 5. Custom Resource
-  EnablePluginsCustomResource:
-    Type: Custom::PluginUpdater
-    DependsOn: GrafanaWorkspace
-    Properties:
-      ServiceToken: !GetAtt PluginUpdaterFunction.Arn
-      WorkspaceId: !Ref GrafanaWorkspace
-
-Outputs:
-  GrafanaEndpoint:
-    Value: !GetAtt GrafanaWorkspace.GrafanaEndpoint
