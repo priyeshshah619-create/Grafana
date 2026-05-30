@@ -105,13 +105,16 @@ jobs:
           echo "RAW OUTPUTS:"
           cat outputs.json
             
-          echo "GrafanaEndpoint=$(jq -r '.[] | select(.OutputKey=="GrafanaEndpoint") | .OutputValue' outputs.json)" >> $GITHUB_OUTPUT
-          echo "GrafanaWorkspaceId=$(jq -r '.[] | select(.OutputKey=="GrafanaWorkspaceId") | .OutputValue' outputs.json)" >> $GITHUB_OUTPUT
-          echo "AlertTopicArn=$(jq -r '.[] | select(.OutputKey=="AlertTopicArn") | .OutputValue' outputs.json)" >> $GITHUB_OUTPUT
+          GrafanaEndpoint=$(jq -r '.[] | select(.OutputKey=="GrafanaEndpoint") | .OutputValue' outputs.json)
+          GrafanaWorkspaceId=$(jq -r '.[] | select(.OutputKey=="GrafanaWorkspaceId") | .OutputValue' outputs.json)
+          AlertTopicArn=$(jq -r '.[] | select(.OutputKey=="AlertTopicArn") | .OutputValue' outputs.json)
 
-          echo "GrafanaEndpoint=$(jq -r '.[] | select(.OutputKey=="GrafanaEndpoint") | .OutputValue' outputs.json)" >> $GITHUB_OUTPUT
-          echo "GrafanaWorkspaceId=$(jq -r '.[] | select(.OutputKey=="GrafanaWorkspaceId") | .OutputValue' outputs.json)" >> $GITHUB_OUTPUT
-          echo "AlertTopicArn=$(jq -r '.[] | select(.OutputKey=="AlertTopicArn") | .OutputValue' outputs.json)" >> $GITHUB_OUTPUT
+          echo "GrafanaEndpoint=$GrafanaEndpoint" >> $GITHUB_OUTPUT
+          echo "GrafanaWorkspaceId=$GrafanaWorkspaceId" >> $GITHUB_OUTPUT
+          echo "AlertTopicArn=$AlertTopicArn" >> $GITHUB_OUTPUT
+
+          echo "DEBUG GrafanaEndpoint=$GrafanaEndpoint"
+          echo "DEBUG SNS_ARN=$AlertTopicArn"
 
   deploy-dashboards-alerts:
     name: Deploy dashboard and alert code
