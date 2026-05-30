@@ -135,6 +135,11 @@ jobs:
             --dashboard-name "${ENVIRONMENT}-business-observability" \
             --dashboard-body file://dashboards/cloudwatch.json
 
+      - name: DEBUG - check outputs from previous job
+        run: |
+          echo "GRAFANA_ENDPOINT = '${{ needs.deploy-infrastructure.outputs.grafana-endpoint }}'"
+          echo "SNS_TOPIC_ARN = '${{ needs.deploy-infrastructure.outputs.sns-topic-arn }}'"
+
       - name: Resolve Grafana service account token
         id: grafana
         run: |
