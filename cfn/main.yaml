@@ -6,22 +6,8 @@ Resources:
       AccountAccessType: CURRENT_ACCOUNT
       AuthenticationProviders:
         - AWS_SSO
-      PermissionType: CUSTOMER_MANAGED
-      WorkspaceRoleArn: !GetAtt GrafanaWorkspaceRole.Arn
+      PermissionType: SERVICE_MANAGED
       Name: !Sub "observability-${AWS::AccountId}"
-
-  GrafanaWorkspaceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: grafana.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSGrafanaAccountRole
 
   PluginUpdaterFunction:
     Type: AWS::Lambda::Function
@@ -32,7 +18,6 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
         ZipFile: |
-          import json
           def lambda_handler(event, context):
               return {'Status': 'SUCCESS'}
 
