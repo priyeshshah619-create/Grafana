@@ -164,7 +164,7 @@ Resources:
       Runtime: python3.12
       Handler: handler.handler
       Role: !GetAtt CustomResourceLambdaRole.Arn
-      Timeout: 240
+      Timeout: 900
       MemorySize: 256
       Code:
         S3Bucket: !Ref ArtifactBucket
@@ -193,7 +193,7 @@ Resources:
       - GrafanaTokenSecret
     Properties:
       ServiceToken: !GetAtt GrafanaBootstrapFunction.Arn
-      ServiceTimeout: 300
+      ServiceTimeout: 900
       WorkspaceId: !Ref GrafanaWorkspace
       WorkspaceEndpoint: !GetAtt GrafanaWorkspace.Endpoint
       PluginIds: !Ref GrafanaPluginIds
