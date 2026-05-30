@@ -10,7 +10,7 @@ Resources:
       AuthenticationProviders:
         - AWS_SSO
       PermissionType: SERVICE_MANAGED
-      Name: enterprise-observability
+      Name: !Sub "observability-${AWS::AccountId}"
 
   # 2. Lambda Execution Role
   LambdaExecutionRole:
