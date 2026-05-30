@@ -123,6 +123,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSGrafanaWorkspacePermissionManagementV2
       Policies:
         - PolicyName: grafana-bootstrap
           PolicyDocument:
@@ -139,6 +140,16 @@ Resources:
                   - grafana:ListWorkspaceServiceAccountTokens
                   - grafana:UpdatePermissions
                   - grafana:UpdateWorkspaceConfiguration
+                  - sso:CreateApplicationAssignment
+                  - sso:DeleteApplicationAssignment
+                  - sso:DescribeApplication
+                  - sso:DescribeApplicationAssignment
+                  - sso:GetManagedApplicationInstance
+                  - sso:ListApplicationAssignments
+                  - sso:ListApplications
+                  - sso:ListInstances
+                  - sso-directory:DescribeUser
+                  - sso-directory:DescribeGroup
                 Resource: "*"
               - Effect: Allow
                 Action:
@@ -193,7 +204,7 @@ Resources:
 
   SsoAssignment:
     Type: Custom::GrafanaSsoAssignment
-    DependsOn: GrafanaWorkspace
+    DependsOn: GrafanaBootstrap
     Properties:
       ServiceToken: !GetAtt SsoAssignmentFunction.Arn
       ServiceTimeout: 180
