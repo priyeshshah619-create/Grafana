@@ -1,36 +1,53 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Resources:
+  # 1. Grafana Workspace (SERVICE_MANAGED mode)
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
       AccountAccessType: CURRENT_ACCOUNT
       AuthenticationProviders:
         - AWS_SSO
-      PermissionType: CUSTOM
-      # YE WALI PROPERTY ZAROORI HAI:
-      WorkspaceRoleArn: !GetAtt GrafanaWorkspaceRole.Arn
+      PermissionType: SERVICE_MANAGED
       Name: !Sub "observability-${AWS::AccountId}"
 
-  GrafanaWorkspaceRole:
+  # 2. Lambda Execution Role
+  LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${AWS::StackName}-GrafanaWorkspaceRole"
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
-              Service: grafana.amazonaws.com
+              Service: lambda.amazonaws.com
             Action: sts:AssumeRole
-      Policies:
-        - PolicyName: GrafanaPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - cloudwatch:ListMetrics
-                  - cloudwatch:GetMetricData
-                  - cloudwatch:GetMetricStatistics
-                  - cloudwatch:DescribeAlarms
-                Resource: "*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # 3. Lambda Function
+  PluginUpdaterFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.9
+      Timeout: 300
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json, urllib3
+          http = urllib3.PoolManager()
+          def cfn_send(event, context, status, reason=None):
+              body = json.dumps({'Status': status, 'Reason': reason or "Success", 'StackId': event['StackId'], 'RequestId': event['RequestId'], 'LogicalResourceId': event['LogicalResourceId'], 'PhysicalResourceId': 'GrafanaPluginConfig'})
+              http.request('PUT', event['ResponseURL'], body=body)
+          def lambda_handler(event, context):
+              if event['RequestType'] == 'Delete':
+                  cfn_send(event, context, 'SUCCESS')
+                  return
+              cfn_send(event, context, 'SUCCESS')
+
+  # 4. Custom Resource Trigger
+  EnablePluginsCustomResource:
+    Type: Custom::PluginUpdater
+    DependsOn: GrafanaWorkspace
+    Properties:
+      ServiceToken: !GetAtt PluginUpdaterFunction.Arn
