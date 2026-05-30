@@ -1,5 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Resources:
+  # 1. Grafana Workspace (Service Managed - No Role ARN needed)
   GrafanaWorkspace:
     Type: AWS::Grafana::Workspace
     Properties:
@@ -9,6 +10,7 @@ Resources:
       PermissionType: SERVICE_MANAGED
       Name: !Sub "observability-${AWS::AccountId}"
 
+  # 2. Minimal Lambda for Custom Resource
   PluginUpdaterFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -21,6 +23,7 @@ Resources:
           def lambda_handler(event, context):
               return {'Status': 'SUCCESS'}
 
+  # 3. Simple Execution Role for Lambda only
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
