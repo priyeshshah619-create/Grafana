@@ -9,10 +9,34 @@ Resources:
       AccountAccessType: CURRENT_ACCOUNT
       AuthenticationProviders:
         - AWS_SSO
-      PermissionType: SERVICE_MANAGED
+      PermissionType: CUSTOM
+      WorkspaceRoleArn: !GetAtt GrafanaWorkspaceRole.Arn
       Name: !Sub "observability-${AWS::AccountId}"
 
-  # 2. Lambda Execution Role
+  # 2. Workspace Role (Required for CURRENT_ACCOUNT access)
+  GrafanaWorkspaceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-GrafanaWorkspaceRole"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: grafana.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: GrafanaDataSourcePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:ListMetrics
+                  - cloudwatch:GetMetricData
+                Resource: "*"
+
+  # 3. Lambda Execution Role
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -25,18 +49,8 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: GrafanaConfigPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - grafana:UpdateWorkspaceConfiguration
-                  - grafana:DescribeWorkspace
-                Resource: !GetAtt GrafanaWorkspace.Arn
 
-  # 3. Lambda Function for Custom Resource
+  # 4. Lambda Function
   PluginUpdaterFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -65,10 +79,10 @@ Resources:
               if event['RequestType'] == 'Delete':
                   cfn_send(event, context, 'SUCCESS', {})
                   return
-              print("Custom Resource execution: Skipping API call to prevent ValidationException.")
+              print("Config skipped to avoid ValidationException")
               cfn_send(event, context, 'SUCCESS', {"Status": "Handled"})
 
-  # 4. Custom Resource Trigger
+  # 5. Custom Resource
   EnablePluginsCustomResource:
     Type: Custom::PluginUpdater
     DependsOn: GrafanaWorkspace
@@ -79,4 +93,3 @@ Resources:
 Outputs:
   GrafanaEndpoint:
     Value: !GetAtt GrafanaWorkspace.GrafanaEndpoint
-    Description: URL of the created Grafana Workspace
