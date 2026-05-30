@@ -44,9 +44,9 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     outputs:
-      grafana-endpoint: ${{ steps.outputs.outputs.GrafanaEndpoint }}
-      workspace-id: ${{ steps.outputs.outputs.GrafanaWorkspaceId }}
-      sns-topic-arn: ${{ steps.outputs.outputs.AlertTopicArn }}
+      grafana-endpoint: ${{ steps.export.outputs.GrafanaEndpoint }}
+      workspace-id: ${{ steps.export.outputs.GrafanaWorkspaceId }}
+      sns-topic-arn: ${{ steps.export.outputs.AlertTopicArn }}
     steps:
       - uses: actions/checkout@v4
 
@@ -93,10 +93,15 @@ jobs:
               NotificationEmail="${{ vars.NOTIFICATION_EMAIL || 'priyesh.shah619@gmail.com' }}"
 
       - name: Export stack outputs
-        id: outputs
+        id: export
         run: |
-          outputs=$(aws cloudformation describe-stacks --stack-name "${STACK_NAME}" --query "Stacks[0].Outputs" --output json)
-          echo "$outputs" | jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' >> "$GITHUB_OUTPUT"
+          aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --query "Stacks[0].Outputs" \
+            --output json > outputs.json
+          echo "GrafanaEndpoint=$(jq -r '.[] | select(.OutputKey=="GrafanaEndpoint") | .OutputValue' outputs.json)" >> $GITHUB_OUTPUT
+          echo "GrafanaWorkspaceId=$(jq -r '.[] | select(.OutputKey=="GrafanaWorkspaceId") | .OutputValue' outputs.json)" >> $GITHUB_OUTPUT
+          echo "AlertTopicArn=$(jq -r '.[] | select(.OutputKey=="AlertTopicArn") | .OutputValue' outputs.json)" >> $GITHUB_OUTPUT  
 
   deploy-dashboards-alerts:
     name: Deploy dashboard and alert code
