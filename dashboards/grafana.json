@@ -1,5 +1,5 @@
 {
-  "uid": "business-observability",
+  "uid": "business-observability-dashboard",
   "title": "Business Observability",
   "tags": ["aws", "cloudwatch", "business", "otel"],
   "timezone": "browser",
