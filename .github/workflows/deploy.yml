@@ -134,10 +134,24 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Resolve stack outputs
+        id: stack
+        run: |
+          set -euo pipefail
+          outputs=$(aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --query "Stacks[0].Outputs" \
+            --output json)
+
+          grafana_endpoint=$(echo "$outputs" | jq -r '.[] | select(.OutputKey=="GrafanaEndpoint") | .OutputValue')
+          alert_topic_arn=$(echo "$outputs" | jq -r '.[] | select(.OutputKey=="AlertTopicArn") | .OutputValue')
+
+          echo "grafana_endpoint=${grafana_endpoint}" >> "$GITHUB_OUTPUT"
+          echo "alert_topic_arn=${alert_topic_arn}" >> "$GITHUB_OUTPUT"
       - name: Validate required outputs
         run: |
-          test -n "${{ needs.deploy-infrastructure.outputs.grafana_endpoint }}" || (echo "Missing GRAFANA_ENDPOINT" && exit 1)
-          test -n "${{ needs.deploy-infrastructure.outputs.alert_topic_arn }}" || (echo "Missing SNS_TOPIC_ARN" && exit 1)
+          test -n "${{ steps.stack.outputs.grafana_endpoint }}" || (echo "Missing GRAFANA_ENDPOINT" && exit 1)
+          test -n "${{ steps.stack.outputs.alert_topic_arn }}" || (echo "Missing SNS_TOPIC_ARN" && exit 1)
 
       - name: Deploy CloudWatch dashboard
         run: |
@@ -147,8 +161,8 @@ jobs:
 
       - name: DEBUG - check outputs from previous job
         run: |
-          echo "GRAFANA_ENDPOINT = '${{ needs.deploy-infrastructure.outputs.grafana_endpoint }}'"
-          echo "SNS_TOPIC_ARN = '${{ needs.deploy-infrastructure.outputs.alert_topic_arn }}'"
+          echo "GRAFANA_ENDPOINT = '${{ steps.stack.outputs.grafana_endpoint }}'"
+          echo "SNS_TOPIC_ARN = '${{ steps.stack.outputs.alert_topic_arn }}'"
 
       - name: Resolve Grafana service account token
         id: grafana
@@ -162,14 +176,14 @@ jobs:
 
       - name: Debug outputs from previous job
         run: |
-          echo "GRAFANA_URL=${{ needs.deploy-infrastructure.outputs.grafana_endpoint }}"
-          echo "SNS_TOPIC_ARN=${{ needs.deploy-infrastructure.outputs.alert_topic_arn }}"
+          echo "GRAFANA_URL=${{ steps.stack.outputs.grafana_endpoint }}"
+          echo "SNS_TOPIC_ARN=${{ steps.stack.outputs.alert_topic_arn }}"
 
       - name: Deploy Grafana dashboards and alerts
         env:
-          GRAFANA_URL: ${{ needs.deploy-infrastructure.outputs.grafana_endpoint }}
+          GRAFANA_URL: ${{ steps.stack.outputs.grafana_endpoint }}
           GRAFANA_TOKEN: ${{ steps.grafana.outputs.token }}
-          SNS_TOPIC_ARN: ${{ needs.deploy-infrastructure.outputs.alert_topic_arn }}
+          SNS_TOPIC_ARN: ${{ steps.stack.outputs.alert_topic_arn }}
         run: bash ./scripts/deploy-grafana-assets.sh
 
 
